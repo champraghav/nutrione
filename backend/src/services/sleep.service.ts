@@ -22,7 +22,8 @@ export interface LogSleepInput {
 
 function toTimestamp(date: string, time: string): Date {
   if (time.includes('T')) return new Date(time);
-  return new Date(`${date}T${time}:00`);
+  const dateOnly = date.slice(0, 10);
+  return new Date(`${dateOnly}T${time}:00`);
 }
 
 function computeDuration(bedtime: Date, wakeTime: Date): number {

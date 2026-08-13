@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@store/app.store';
 import { Button } from '@components/Button';
 import { getHealthScoreStatus } from '@utils/formatters';
@@ -41,6 +41,7 @@ function DashboardPage() {
 
 function AuthPage() {
   const { signin } = useAppStore();
+  const navigate = useNavigate();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -49,7 +50,8 @@ function AuthPage() {
     e.preventDefault();
     setError(null);
     const ok = await signin(email, password);
-    if (!ok) setError('Invalid email or password');
+    if (ok) navigate('/');
+    else setError('Invalid email or password');
   };
 
   return (
