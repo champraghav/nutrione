@@ -136,6 +136,8 @@ CREATE TABLE IF NOT EXISTS foods (
   sodium_mg NUMERIC(8,2) DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS barcode TEXT UNIQUE;
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS saturated_fat_g NUMERIC(8,2) DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_foods_name_trgm ON foods USING gin (name gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS nutrition_logs (
@@ -149,6 +151,10 @@ CREATE TABLE IF NOT EXISTS nutrition_logs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(user_id, log_date)
 );
+ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS total_fiber_g NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS total_sugar_g NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS total_sodium_mg NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE nutrition_logs ADD COLUMN IF NOT EXISTS total_saturated_fat_g NUMERIC(8,2) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS meal_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -164,6 +170,10 @@ CREATE TABLE IF NOT EXISTS meal_items (
   fat_g NUMERIC(8,2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS fiber_g NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS sugar_g NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS sodium_mg NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS saturated_fat_g NUMERIC(8,2) NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_meal_items_user_date ON meal_items(user_id, log_date DESC);
 
 -- ============================================================

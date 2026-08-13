@@ -135,6 +135,7 @@ export const api = {
   // Nutrition
   searchFoods: (q: string, limit = 20) => request(http.get('/nutrition/foods', { params: { q, limit } })),
   getFood: (id: string) => request(http.get(`/nutrition/foods/${id}`)),
+  getFoodByBarcode: (barcode: string) => request(http.get(`/nutrition/foods/barcode/${encodeURIComponent(barcode)}`)),
   getNutritionLog: (date: string) => request(http.get('/nutrition/logs', { params: { date } })),
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),

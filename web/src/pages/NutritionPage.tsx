@@ -4,18 +4,24 @@ import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
+import { BarcodeScanner } from '@components/BarcodeScanner';
 import { capitalize, formatDate } from '@utils/formatters';
 
 interface Food {
   id: string;
   name: string;
   name_hi: string | null;
+  brand?: string | null;
   serving_size: string | number;
   serving_unit: string;
   calories: string | number;
   protein_g: string | number;
   carbs_g: string | number;
   fat_g: string | number;
+  fiber_g: string | number | null;
+  sugar_g: string | number | null;
+  sodium_mg: string | number | null;
+  saturated_fat_g: string | number | null;
 }
 
 interface MealItem {
@@ -30,11 +36,21 @@ interface MealItem {
   fat_g: string | number;
 }
 
-interface Summary {
-  total_calories: string | number;
-  total_protein_g: string | number;
-  total_carbs_g: string | number;
-  total_fat_g: string | number;
+interface NutrientSet {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  saturated_fat_g: number;
+}
+
+interface DailyNutrition {
+  consumed: NutrientSet;
+  targets: NutrientSet;
+  remaining: NutrientSet;
 }
 
 interface HistoryDay {
@@ -44,19 +60,69 @@ interface HistoryDay {
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+const GOAL_NUTRIENTS: Array<{ key: keyof NutrientSet; label: string; unit: string }> = [
+  { key: 'calories', label: 'Calories', unit: '' },
+  { key: 'protein_g', label: 'Protein', unit: 'g' },
+  { key: 'carbs_g', label: 'Carbs', unit: 'g' },
+  { key: 'fat_g', label: 'Fat', unit: 'g' },
+  { key: 'fiber_g', label: 'Fiber', unit: 'g' },
+];
+
+const LIMIT_NUTRIENTS: Array<{ key: keyof NutrientSet; label: string; unit: string }> = [
+  { key: 'sugar_g', label: 'Sugar', unit: 'g' },
+  { key: 'saturated_fat_g', label: 'Saturated fat', unit: 'g' },
+  { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
+];
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function n(value: string | number | undefined): number {
-  return value === undefined ? 0 : Number(value);
+function n(value: string | number | null | undefined): number {
+  return value === null || value === undefined ? 0 : Number(value);
+}
+
+function NutrientBar({
+  label,
+  unit,
+  consumed,
+  target,
+  isLimit,
+}: {
+  label: string;
+  unit: string;
+  consumed: number;
+  target: number;
+  isLimit: boolean;
+}) {
+  const pct = target > 0 ? Math.min(100, (consumed / target) * 100) : 0;
+  const over = consumed > target;
+  const barColor = isLimit ? (over ? 'bg-danger-500' : 'bg-success-500') : over ? 'bg-warning-500' : 'bg-primary-600';
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-600">{label}</span>
+        <span className={over && isLimit ? 'text-danger-600 font-medium' : 'text-gray-500'}>
+          {Math.round(consumed)}
+          {unit} / {Math.round(target)}
+          {unit}
+          {isLimit && over && ' · over limit'}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className={`h-full rounded-full ${barColor} transition-smooth`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
 }
 
 export function NutritionPage() {
   const [date] = useState(today());
-  const [summary, setSummary] = useState<Summary | null>(null);
+  const [nutrition, setNutrition] = useState<DailyNutrition | null>(null);
   const [items, setItems] = useState<MealItem[]>([]);
   const [history, setHistory] = useState<HistoryDay[]>([]);
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[]>([]);
   const [searching, setSearching] = useState(false);
@@ -65,13 +131,17 @@ export function NutritionPage() {
   const [mealType, setMealType] = useState('lunch');
   const [adding, setAdding] = useState(false);
 
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
   const refresh = async () => {
     const [summaryRes, logRes, historyRes] = await Promise.all([
       api.getNutritionSummary(date),
       api.getNutritionLog(date),
       api.getNutritionHistory(30),
     ]);
-    if (summaryRes.success) setSummary(summaryRes.data as Summary);
+    if (summaryRes.success) setNutrition(summaryRes.data as DailyNutrition);
     if (logRes.success) setItems(logRes.data as MealItem[]);
     if (historyRes.success) setHistory((historyRes.data as HistoryDay[]).slice().reverse());
   };
@@ -95,6 +165,26 @@ export function NutritionPage() {
     return () => clearTimeout(handle);
   }, [query]);
 
+  const pickFood = (food: Food) => {
+    setSelectedFood(food);
+    setQuantity(String(n(food.serving_size) || 100));
+    setResults([]);
+    setQuery('');
+    setScannerOpen(false);
+  };
+
+  const onBarcodeDetected = async (barcode: string) => {
+    setScanning(true);
+    setScanError(null);
+    const res = await api.getFoodByBarcode(barcode);
+    setScanning(false);
+    if (res.success) {
+      pickFood(res.data as Food);
+    } else {
+      setScanError(res.error?.message ?? 'Could not look up that barcode.');
+    }
+  };
+
   const onAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFood) return;
@@ -102,8 +192,6 @@ export function NutritionPage() {
     await api.addMealItem(selectedFood.id, Number(quantity), selectedFood.serving_unit, date, mealType);
     setAdding(false);
     setSelectedFood(null);
-    setQuery('');
-    setResults([]);
     refresh();
   };
 
@@ -120,29 +208,65 @@ export function NutritionPage() {
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Today's totals</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs text-gray-500">Calories</p>
-            <p className="text-xl font-semibold">{n(summary?.total_calories).toFixed(0)}</p>
+        <h2 className="text-lg font-semibold mb-4">Today's targets</h2>
+        {!nutrition && <p className="text-gray-500 text-sm">Loading…</p>}
+        {nutrition && (
+          <div className="space-y-5">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Goals</p>
+              <div className="space-y-3">
+                {GOAL_NUTRIENTS.map((nut) => (
+                  <NutrientBar
+                    key={nut.key}
+                    label={nut.label}
+                    unit={nut.unit}
+                    consumed={nutrition.consumed[nut.key]}
+                    target={nutrition.targets[nut.key]}
+                    isLimit={false}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Limits</p>
+              <div className="space-y-3">
+                {LIMIT_NUTRIENTS.map((nut) => (
+                  <NutrientBar
+                    key={nut.key}
+                    label={nut.label}
+                    unit={nut.unit}
+                    consumed={nutrition.consumed[nut.key]}
+                    target={nutrition.targets[nut.key]}
+                    isLimit
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              Targets are estimated from your profile (or a 2000 kcal default if it's incomplete) using standard
+              nutrition guidelines. Fill in your weight, height, and activity level on the Profile page for more
+              accurate numbers.
+            </p>
           </div>
-          <div>
-            <p className="text-xs text-gray-500">Protein</p>
-            <p className="text-xl font-semibold">{n(summary?.total_protein_g).toFixed(0)}g</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Carbs</p>
-            <p className="text-xl font-semibold">{n(summary?.total_carbs_g).toFixed(0)}g</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Fat</p>
-            <p className="text-xl font-semibold">{n(summary?.total_fat_g).toFixed(0)}g</p>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Log a food</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Log a food</h2>
+          <Button variant="secondary" onClick={() => setScannerOpen((v) => !v)}>
+            {scannerOpen ? 'Cancel scan' : '📷 Scan barcode'}
+          </Button>
+        </div>
+
+        {scannerOpen && (
+          <div className="mb-4">
+            <BarcodeScanner onDetected={onBarcodeDetected} onClose={() => setScannerOpen(false)} />
+            {scanning && <p className="text-sm text-gray-500 mt-2">Looking up…</p>}
+            {scanError && <p className="text-sm text-danger-600 mt-2">{scanError}</p>}
+          </div>
+        )}
+
         <Input
           placeholder="Search foods… (e.g. chicken, dal, roti)"
           value={query}
@@ -160,11 +284,7 @@ export function NutritionPage() {
               <li
                 key={food.id}
                 className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
-                onClick={() => {
-                  setSelectedFood(food);
-                  setQuantity(String(n(food.serving_size) || 100));
-                  setResults([]);
-                }}
+                onClick={() => pickFood(food)}
               >
                 <div>
                   <p className="text-sm font-medium">{food.name}</p>
@@ -181,7 +301,19 @@ export function NutritionPage() {
 
         {selectedFood && (
           <form onSubmit={onAdd} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-            <p className="text-sm font-medium">{selectedFood.name}</p>
+            <div>
+              <p className="text-sm font-medium">
+                {selectedFood.name}
+                {selectedFood.brand ? ` · ${selectedFood.brand}` : ''}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Per {n(selectedFood.serving_size)}
+                {selectedFood.serving_unit}: {n(selectedFood.calories).toFixed(0)} kcal ·{' '}
+                {n(selectedFood.protein_g).toFixed(1)}g protein · {n(selectedFood.carbs_g).toFixed(1)}g carbs ·{' '}
+                {n(selectedFood.fat_g).toFixed(1)}g fat · {n(selectedFood.fiber_g).toFixed(1)}g fiber ·{' '}
+                {n(selectedFood.sugar_g).toFixed(1)}g sugar · {n(selectedFood.sodium_mg).toFixed(0)}mg sodium
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label={`Quantity (${selectedFood.serving_unit})`}
@@ -240,7 +372,7 @@ export function NutritionPage() {
                 <p className="text-sm font-medium">{item.food_name}</p>
                 <p className="text-xs text-gray-500">
                   {capitalize(item.meal_type)} · {n(item.quantity)}
-                  {item.unit} · {n(item.calories).toFixed(0)} kcal
+                  {item.unit} · {n(item.calories).toFixed(0)} kcal · {n(item.protein_g).toFixed(1)}g protein
                 </p>
               </div>
               <button className="text-danger-600 text-sm hover:underline" onClick={() => onRemove(item.id)}>

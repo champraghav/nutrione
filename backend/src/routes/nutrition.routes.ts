@@ -20,6 +20,15 @@ nutritionRouter.get('/foods', async (req, res, next) => {
   }
 });
 
+nutritionRouter.get('/foods/barcode/:barcode', async (req, res, next) => {
+  try {
+    const food = await nutritionService.getFoodByBarcode(req.params.barcode);
+    res.json({ success: true, data: food });
+  } catch (err) {
+    next(err);
+  }
+});
+
 nutritionRouter.get('/foods/:id', async (req, res, next) => {
   try {
     const food = await nutritionService.getFoodById(req.params.id);
@@ -42,7 +51,7 @@ nutritionRouter.get('/logs', async (req, res, next) => {
 nutritionRouter.get('/summary', async (req, res, next) => {
   try {
     const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
-    const summary = await nutritionService.getSummary(req.userId, date);
+    const summary = await nutritionService.getDailyNutrition(req.userId, date);
     res.json({ success: true, data: summary });
   } catch (err) {
     next(err);
