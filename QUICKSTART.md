@@ -29,6 +29,21 @@ night of sleep; the app is designed to make sense the moment you do.
 
 To stop everything: `docker compose down` (add `-v` to also wipe the database).
 
+### Optional: plate photo scanning
+
+Scanning a photo of your meal to identify the foods on it needs an Anthropic
+API key. Without one, the button still appears and explains it isn't
+configured — search and barcode logging work regardless.
+
+Add to `backend/.env` (or the `api` service's environment in
+`docker-compose.yml`):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Get a key at https://console.anthropic.com/settings/keys.
+
 ### Optional: AI coach
 
 The AI Coach page works without this — it just shows a friendly

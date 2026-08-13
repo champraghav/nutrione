@@ -25,5 +25,12 @@ export const env = {
   ollamaUrl: process.env.OLLAMA_URL ?? 'http://localhost:11434',
   ollamaModel: process.env.OLLAMA_MODEL ?? 'mistral',
 
+  // Photo-based food recognition (optional; the feature reports itself as
+  // unconfigured rather than erroring when the key is absent).
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
+  visionModel: process.env.VISION_MODEL ?? 'claude-sonnet-4-5-20250929',
+  // Overridable so the API can be pointed at a compatible proxy or gateway.
+  anthropicApiUrl: process.env.ANTHROPIC_API_URL ?? 'https://api.anthropic.com/v1/messages',
+
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
 };

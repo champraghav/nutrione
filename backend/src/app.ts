@@ -13,7 +13,8 @@ export function createApp(): Express {
 
   app.use(helmet());
   app.use(cors({ origin: env.corsOrigin }));
-  app.use(express.json({ limit: '1mb' }));
+  // Generous enough for a base64-encoded meal photo from a phone camera.
+  app.use(express.json({ limit: '12mb' }));
   app.use(pinoHttp({ logger }));
 
   app.get('/health', (_req, res) => {

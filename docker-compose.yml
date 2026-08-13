@@ -59,6 +59,9 @@ services:
       REDIS_URL: redis://redis:6379
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: mistral
+      # Optional: enables plate-photo food recognition. Left empty, the
+      # feature reports itself as unconfigured and everything else works.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       JWT_ACCESS_SECRET: change-me-access-secret
       JWT_REFRESH_SECRET: change-me-refresh-secret
       CORS_ORIGIN: http://localhost:5173

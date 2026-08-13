@@ -2,6 +2,7 @@ import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
 import * as nutritionService from '../services/nutrition.service';
+import * as visionService from '../services/vision.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 
@@ -96,6 +97,74 @@ nutritionRouter.delete('/meals/:id', async (req, res, next) => {
   try {
     await nutritionService.removeMealItem(req.userId, req.params.id);
     res.json({ success: true, data: { deleted: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const analyzePhotoSchema = Joi.object({
+  // Accepts a bare base64 payload or a full data: URL from the browser.
+  image: Joi.string().min(100).required(),
+  mediaType: Joi.string().valid('image/jpeg', 'image/png', 'image/webp'),
+});
+
+nutritionRouter.post('/analyze-photo', validate(analyzePhotoSchema), async (req, res, next) => {
+  try {
+    const { image, mediaType } = req.body as { image: string; mediaType?: string };
+
+    let base64 = image;
+    let type = mediaType ?? 'image/jpeg';
+    const dataUrl = image.match(/^data:(image\/[a-zA-Z+]+);base64,(.*)$/s);
+    if (dataUrl) {
+      type = dataUrl[1];
+      base64 = dataUrl[2];
+    }
+
+    const analysis = await visionService.analyzePhoto(base64, type);
+    res.json({ success: true, data: analysis });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const bulkLogSchema = Joi.object({
+  date: Joi.string().isoDate().required(),
+  mealType: Joi.string().valid('breakfast', 'lunch', 'dinner', 'snack'),
+  items: Joi.array()
+    .items(
+      Joi.object({
+        foodId: Joi.string().uuid().required(),
+        quantity: Joi.number().positive().required(),
+        unit: Joi.string().required(),
+      })
+    )
+    .min(1)
+    .max(30)
+    .required(),
+});
+
+nutritionRouter.post('/meals/bulk', validate(bulkLogSchema), async (req, res, next) => {
+  try {
+    const { date, mealType, items } = req.body as {
+      date: string;
+      mealType?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+      items: Array<{ foodId: string; quantity: number; unit: string }>;
+    };
+
+    const logged = [];
+    for (const item of items) {
+      logged.push(
+        await nutritionService.addMealItem(req.userId, {
+          foodId: item.foodId,
+          quantity: item.quantity,
+          unit: item.unit,
+          logDate: date,
+          mealType,
+        })
+      );
+    }
+
+    res.status(201).json({ success: true, data: { logged: logged.length, items: logged } });
   } catch (err) {
     next(err);
   }

@@ -136,6 +136,10 @@ export const api = {
   searchFoods: (q: string, limit = 20) => request(http.get('/nutrition/foods', { params: { q, limit } })),
   getFood: (id: string) => request(http.get(`/nutrition/foods/${id}`)),
   getFoodByBarcode: (barcode: string) => request(http.get(`/nutrition/foods/barcode/${encodeURIComponent(barcode)}`)),
+  analyzePhoto: (image: string, mediaType?: string) =>
+    request(http.post('/nutrition/analyze-photo', { image, mediaType })),
+  bulkLogMeals: (date: string, items: Array<{ foodId: string; quantity: number; unit: string }>, mealType?: string) =>
+    request(http.post('/nutrition/meals/bulk', { date, items, mealType })),
   getNutritionLog: (date: string) => request(http.get('/nutrition/logs', { params: { date } })),
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),

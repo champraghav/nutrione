@@ -5,6 +5,7 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { BarcodeScanner } from '@components/BarcodeScanner';
+import { PlateScanner } from '@components/PlateScanner';
 import { capitalize, formatDate } from '@utils/formatters';
 
 interface Food {
@@ -134,6 +135,7 @@ export function NutritionPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [plateOpen, setPlateOpen] = useState(false);
 
   const refresh = async () => {
     const [summaryRes, logRes, historyRes] = await Promise.all([
@@ -252,12 +254,40 @@ export function NutritionPage() {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
           <h2 className="text-lg font-semibold">Log a food</h2>
-          <Button variant="secondary" onClick={() => setScannerOpen((v) => !v)}>
-            {scannerOpen ? 'Cancel scan' : '📷 Scan barcode'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setPlateOpen((v) => !v);
+                setScannerOpen(false);
+              }}
+            >
+              {plateOpen ? 'Cancel' : '🍽️ Scan plate'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setScannerOpen((v) => !v);
+                setPlateOpen(false);
+              }}
+            >
+              {scannerOpen ? 'Cancel' : '📷 Scan barcode'}
+            </Button>
+          </div>
         </div>
+
+        {plateOpen && (
+          <div className="mb-4">
+            <PlateScanner
+              date={date}
+              mealType={mealType}
+              onLogged={refresh}
+              onClose={() => setPlateOpen(false)}
+            />
+          </div>
+        )}
 
         {scannerOpen && (
           <div className="mb-4">

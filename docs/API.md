@@ -42,8 +42,18 @@ curl -X POST $BASE/auth/logout -H "Content-Type: application/json" \
 
 ## Nutrition
 
-- `GET /nutrition/foods?q=chicken&limit=20` — search the food database
+- `GET /nutrition/foods?q=chicken&limit=20` — search the food database (~130 common Indian + global foods)
 - `GET /nutrition/foods/:id`
+- `GET /nutrition/foods/barcode/:barcode` — look up a packaged food by barcode.
+  Checks the local DB first, then Open Food Facts, caching the result.
+- `POST /nutrition/analyze-photo` — body: `{ image, mediaType? }` where `image`
+  is base64 (a `data:` URL is also accepted). Identifies the foods on a plate,
+  estimates portions, and returns per-item + total nutrition. Nothing is logged
+  until you confirm. Requires `ANTHROPIC_API_KEY`; without it the endpoint
+  returns a clear `VISION_NOT_CONFIGURED` error and the rest of the app is
+  unaffected.
+- `POST /nutrition/meals/bulk` — body: `{ date, mealType?, items: [{ foodId, quantity, unit }] }`.
+  Logs a whole plate at once (used after confirming a photo scan).
 - `GET /nutrition/logs?date=2026-08-13` — meal items logged for a date
 - `GET /nutrition/summary?date=2026-08-13` — daily totals
 - `GET /nutrition/history?days=30`
