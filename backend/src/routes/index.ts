@@ -1,0 +1,18 @@
+import { Router } from 'express';
+import { authRouter } from './auth.routes';
+import { userRouter } from './user.routes';
+import { nutritionRouter } from './nutrition.routes';
+import { fitnessRouter } from './fitness.routes';
+import { sleepRouter } from './sleep.routes';
+import { healthRouter } from './health.routes';
+import { aiRouter } from './ai.routes';
+
+export const apiRouter = Router();
+
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/users', userRouter);
+apiRouter.use('/nutrition', nutritionRouter);
+apiRouter.use('/fitness', fitnessRouter);
+apiRouter.use('/sleep', sleepRouter);
+apiRouter.use('/health', healthRouter);
+apiRouter.use('/ai', aiRouter);
