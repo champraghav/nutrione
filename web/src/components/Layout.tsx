@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/nutrition', label: 'Nutrition' },
   { to: '/fitness', label: 'Fitness' },
   { to: '/sleep', label: 'Sleep' },
+  { to: '/library', label: 'Library' },
   { to: '/coach', label: 'AI Coach' },
   { to: '/timeline', label: 'Timeline' },
   { to: '/profile', label: 'Profile' },
@@ -20,11 +21,11 @@ export function Layout() {
   return (
     <div className="min-h-screen">
       <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center justify-between">
             <div className="flex items-center gap-6">
               <span className="text-lg font-bold text-primary-700">Health OS</span>
-              <div className="hidden sm:flex items-center gap-1">
+              <div className="hidden sm:flex items-center gap-1 overflow-x-auto">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.to}
@@ -32,7 +33,7 @@ export function Layout() {
                     end={item.to === '/'}
                     className={({ isActive }) =>
                       clsx(
-                        'px-3 py-1.5 rounded-md text-sm font-medium transition-smooth',
+                        'px-2.5 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-smooth',
                         isActive ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50'
                       )
                     }
