@@ -31,16 +31,15 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   user: null,
-  authLoading: false,
+  authLoading: true,
   healthScore: null,
   healthScoreLoading: false,
 
   fetchUser: async () => {
     if (!api.isAuthenticated()) {
-      set({ user: null });
+      set({ user: null, authLoading: false });
       return;
     }
-    set({ authLoading: true });
     const res = await api.getMe();
     set({ user: res.success ? (res.data as AppUser) : null, authLoading: false });
   },

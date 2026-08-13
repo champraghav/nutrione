@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { logger } from './utils/logger';
 import { apiRouter } from './routes';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware';
+import { apiRateLimit } from './middleware/rateLimit.middleware';
 
 export function createApp(): Express {
   const app = express();
@@ -19,7 +20,7 @@ export function createApp(): Express {
     res.json({ success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
   });
 
-  app.use('/api/v1', apiRouter);
+  app.use('/api/v1', apiRateLimit, apiRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

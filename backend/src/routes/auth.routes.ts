@@ -2,8 +2,11 @@ import { Router } from 'express';
 import Joi from 'joi';
 import * as authService from '../services/auth.service';
 import { validate } from '../middleware/validate.middleware';
+import { authRateLimit } from '../middleware/rateLimit.middleware';
 
 export const authRouter = Router();
+
+authRouter.use(authRateLimit);
 
 const signupSchema = Joi.object({
   email: Joi.string().email().required(),
