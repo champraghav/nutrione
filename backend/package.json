@@ -10,6 +10,8 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/database/migrate.ts",
     "seed": "tsx src/database/seed.ts",
+    "migrate:prod": "node dist/database/migrate.js",
+    "seed:prod": "node dist/database/seed.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
