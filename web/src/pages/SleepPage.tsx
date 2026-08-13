@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
@@ -21,6 +22,13 @@ interface Analysis {
   recommendation: string;
 }
 
+interface Trend {
+  period: 'week' | 'month';
+  sessions: SleepSession[];
+  averageDurationMinutes: number;
+  averageQuality: number;
+}
+
 const STATUS_VARIANT = {
   excellent: 'success',
   good: 'primary',
@@ -39,6 +47,8 @@ function formatHours(minutes: number): string {
 export function SleepPage() {
   const [logs, setLogs] = useState<SleepSession[]>([]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [trend, setTrend] = useState<Trend | null>(null);
+  const [trendPeriod, setTrendPeriod] = useState<'week' | 'month'>('week');
 
   const [bedtime, setBedtime] = useState('23:00');
   const [wakeTime, setWakeTime] = useState('07:00');
@@ -46,13 +56,15 @@ export function SleepPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const refresh = async () => {
-    const res = await api.getSleepLogs(30);
-    if (res.success) setLogs(res.data as SleepSession[]);
+    const [logsRes, trendRes] = await Promise.all([api.getSleepLogs(30), api.getSleepTrend(trendPeriod)]);
+    if (logsRes.success) setLogs(logsRes.data as SleepSession[]);
+    if (trendRes.success) setTrend(trendRes.data as Trend);
   };
 
   useEffect(() => {
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendPeriod]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +119,58 @@ export function SleepPage() {
           <p className="text-xs text-gray-400 mt-2">{formatHours(analysis.session.duration_minutes)} of sleep</p>
         </div>
       )}
+
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Trend</h2>
+          <div className="flex gap-1">
+            {(['week', 'month'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setTrendPeriod(p)}
+                className={`px-3 py-1 rounded-md text-xs font-medium ${
+                  trendPeriod === p ? 'bg-primary-50 text-primary-700' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'week' ? 'Week' : 'Month'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {trend && (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-gray-500">Avg duration</p>
+                <p className="text-xl font-semibold">{formatHours(trend.averageDurationMinutes)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Avg quality</p>
+                <p className="text-xl font-semibold">{trend.averageQuality || '—'}/5</p>
+              </div>
+            </div>
+            {trend.sessions.length > 0 && (
+              <div style={{ width: '100%', height: 200 }}>
+                <ResponsiveContainer>
+                  <BarChart
+                    data={trend.sessions
+                      .slice()
+                      .reverse()
+                      .map((s) => ({ date: formatDate(s.sleep_date, 'MMM d'), hours: Math.round((s.duration_minutes / 60) * 10) / 10 }))}
+                  >
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 11 }} width={30} />
+                    <Tooltip />
+                    <Bar dataKey="hours" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {trend.sessions.length === 0 && <p className="text-gray-500 text-sm">No sleep logged in this period.</p>}
+          </>
+        )}
+      </div>
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Recent sleep logs</h2>

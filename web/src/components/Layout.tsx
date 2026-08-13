@@ -9,7 +9,9 @@ const NAV_ITEMS = [
   { to: '/fitness', label: 'Fitness' },
   { to: '/sleep', label: 'Sleep' },
   { to: '/coach', label: 'AI Coach' },
+  { to: '/timeline', label: 'Timeline' },
   { to: '/profile', label: 'Profile' },
+  { to: '/settings', label: 'Settings' },
 ];
 
 export function Layout() {

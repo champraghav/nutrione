@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
-import { capitalize } from '@utils/formatters';
+import { capitalize, formatDate } from '@utils/formatters';
 
 interface Food {
   id: string;
@@ -36,6 +37,11 @@ interface Summary {
   total_fat_g: string | number;
 }
 
+interface HistoryDay {
+  log_date: string;
+  total_calories: string | number;
+}
+
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 function today(): string {
@@ -50,6 +56,7 @@ export function NutritionPage() {
   const [date] = useState(today());
   const [summary, setSummary] = useState<Summary | null>(null);
   const [items, setItems] = useState<MealItem[]>([]);
+  const [history, setHistory] = useState<HistoryDay[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[]>([]);
   const [searching, setSearching] = useState(false);
@@ -59,9 +66,14 @@ export function NutritionPage() {
   const [adding, setAdding] = useState(false);
 
   const refresh = async () => {
-    const [summaryRes, logRes] = await Promise.all([api.getNutritionSummary(date), api.getNutritionLog(date)]);
+    const [summaryRes, logRes, historyRes] = await Promise.all([
+      api.getNutritionSummary(date),
+      api.getNutritionLog(date),
+      api.getNutritionHistory(30),
+    ]);
     if (summaryRes.success) setSummary(summaryRes.data as Summary);
     if (logRes.success) setItems(logRes.data as MealItem[]);
+    if (historyRes.success) setHistory((historyRes.data as HistoryDay[]).slice().reverse());
   };
 
   useEffect(() => {
@@ -196,6 +208,25 @@ export function NutritionPage() {
               </Button>
             </div>
           </form>
+        )}
+      </div>
+
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">Last 30 days · calories</h2>
+        {history.filter((d) => n(d.total_calories) > 0).length === 0 && (
+          <p className="text-gray-500 text-sm">No history yet. Log a few days to see a trend.</p>
+        )}
+        {history.length > 0 && (
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer>
+              <LineChart data={history.map((d) => ({ date: formatDate(d.log_date, 'MMM d'), calories: n(d.total_calories) }))}>
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11 }} width={40} />
+                <Tooltip />
+                <Line type="monotone" dataKey="calories" stroke="#2563eb" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 

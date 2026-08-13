@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
@@ -29,6 +30,12 @@ interface PersonalRecord {
   achieved_at: string;
 }
 
+interface Summary {
+  total_workouts: string | number;
+  total_minutes: string | number;
+  total_calories: string | number;
+}
+
 const WORKOUT_TYPES = ['strength', 'cardio', 'flexibility', 'sports'];
 const INTENSITIES = ['light', 'moderate', 'intense'];
 
@@ -40,10 +47,26 @@ function n(value: string | number | undefined): number {
   return value === undefined ? 0 : Number(value);
 }
 
+function last7DaysChartData(workouts: Workout[]): Array<{ date: string; minutes: number }> {
+  const days: Array<{ key: string; date: string; minutes: number }> = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(Date.now() - i * 86400000);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ key, date: formatDate(key, 'EEE'), minutes: 0 });
+  }
+  for (const w of workouts) {
+    const key = w.workout_date.slice(0, 10);
+    const day = days.find((d) => d.key === key);
+    if (day) day.minutes += w.duration_minutes;
+  }
+  return days;
+}
+
 export function FitnessPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [records, setRecords] = useState<PersonalRecord[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
 
   const [duration, setDuration] = useState('30');
@@ -57,9 +80,14 @@ export function FitnessPage() {
   const [addingExercise, setAddingExercise] = useState(false);
 
   const refresh = async () => {
-    const [workoutsRes, recordsRes] = await Promise.all([api.getWorkouts(30), api.getPersonalRecords()]);
+    const [workoutsRes, recordsRes, summaryRes] = await Promise.all([
+      api.getWorkouts(30),
+      api.getPersonalRecords(),
+      api.getFitnessSummary(7),
+    ]);
     if (workoutsRes.success) setWorkouts(workoutsRes.data as Workout[]);
     if (recordsRes.success) setRecords(recordsRes.data as PersonalRecord[]);
+    if (summaryRes.success) setSummary(summaryRes.data as Summary);
   };
 
   useEffect(() => {
@@ -163,6 +191,36 @@ export function FitnessPage() {
               Add exercise
             </Button>
           </form>
+        )}
+      </div>
+
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">This week</h2>
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div>
+            <p className="text-xs text-gray-500">Workouts</p>
+            <p className="text-xl font-semibold">{n(summary?.total_workouts)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Minutes</p>
+            <p className="text-xl font-semibold">{n(summary?.total_minutes)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Calories burned</p>
+            <p className="text-xl font-semibold">{n(summary?.total_calories).toFixed(0)}</p>
+          </div>
+        </div>
+        {workouts.length > 0 && (
+          <div style={{ width: '100%', height: 200 }}>
+            <ResponsiveContainer>
+              <BarChart data={last7DaysChartData(workouts)}>
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={30} />
+                <Tooltip />
+                <Bar dataKey="minutes" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 
