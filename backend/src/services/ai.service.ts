@@ -7,7 +7,7 @@ import { getSummary as getNutritionSummary } from './nutrition.service';
 import { getSleepLogs } from './sleep.service';
 
 const SAFETY_DISCLAIMER =
-  "\n\n_I'm an AI wellness coach, not a medical professional. This isn't medical advice — please consult a doctor for diagnosis, medication, or treatment decisions._";
+  "\n\nI'm an AI wellness coach, not a medical professional. This isn't medical advice — please consult a doctor for diagnosis, medication, or treatment decisions.";
 
 const BLOCKED_PATTERNS = [
   /diagnos(e|is|ing)/i,
