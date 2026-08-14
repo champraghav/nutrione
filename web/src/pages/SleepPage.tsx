@@ -6,6 +6,7 @@ import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { Badge } from '@components/Badge';
 import { formatDate } from '@utils/formatters';
+import { todayLocal } from '@utils/dates';
 
 interface SleepSession {
   id: string;
@@ -36,10 +37,6 @@ const STATUS_VARIANT = {
   poor: 'danger',
 } as const;
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function formatHours(minutes: number): string {
   return `${(minutes / 60).toFixed(1)}h`;
 }
@@ -69,7 +66,7 @@ export function SleepPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    await api.logSleep(today(), bedtime, wakeTime, Number(quality));
+    await api.logSleep(todayLocal(), bedtime, wakeTime, Number(quality));
     setSubmitting(false);
     refresh();
   };

@@ -5,6 +5,7 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { capitalize, formatDate } from '@utils/formatters';
+import { todayLocal, toLocalDateString } from '@utils/dates';
 
 interface Exercise {
   id: string;
@@ -39,10 +40,6 @@ interface Summary {
 const WORKOUT_TYPES = ['strength', 'cardio', 'flexibility', 'sports'];
 const INTENSITIES = ['light', 'moderate', 'intense'];
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function n(value: string | number | undefined): number {
   return value === undefined ? 0 : Number(value);
 }
@@ -51,7 +48,7 @@ function last7DaysChartData(workouts: Workout[]): Array<{ date: string; minutes:
   const days: Array<{ key: string; date: string; minutes: number }> = [];
   for (let i = 6; i >= 0; i -= 1) {
     const d = new Date(Date.now() - i * 86400000);
-    const key = d.toISOString().slice(0, 10);
+    const key = toLocalDateString(d);
     days.push({ key, date: formatDate(key, 'EEE'), minutes: 0 });
   }
   for (const w of workouts) {
@@ -104,7 +101,7 @@ export function FitnessPage() {
   const onCreateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
-    const res = await api.createWorkout(today(), Number(duration), workoutType, intensity);
+    const res = await api.createWorkout(todayLocal(), Number(duration), workoutType, intensity);
     setCreating(false);
     if (res.success) {
       setActiveWorkoutId((res.data as Workout).id);

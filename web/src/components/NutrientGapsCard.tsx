@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@api/client';
+import { friendlyDateLabel, todayLocal } from '@utils/dates';
 
 interface Suggestion {
   foodId: string;
@@ -48,11 +49,13 @@ export function NutrientGapsCard({
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold mb-1">What you're missing today</h2>
+      <h2 className="text-lg font-semibold mb-1">
+        {date === todayLocal() ? "What you're missing today" : `What was missing · ${friendlyDateLabel(date)}`}
+      </h2>
 
       {gaps.length === 0 && (
         <p className="text-sm text-success-600">
-          You're on track for protein and fiber today — nothing major missing. 🎉
+          On track for protein and fiber — nothing major missing. 🎉
         </p>
       )}
 

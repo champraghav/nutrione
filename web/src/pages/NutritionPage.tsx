@@ -9,6 +9,8 @@ import { PlateScanner } from '@components/PlateScanner';
 import { HydrationCard } from '@components/HydrationCard';
 import { NutrientGapsCard } from '@components/NutrientGapsCard';
 import { capitalize, formatDate } from '@utils/formatters';
+import { todayLocal, friendlyDateLabel } from '@utils/dates';
+import { DatePicker } from '@components/DatePicker';
 
 interface Food {
   id: string;
@@ -77,10 +79,6 @@ const LIMIT_NUTRIENTS: Array<{ key: keyof NutrientSet; label: string; unit: stri
   { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
 ];
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function n(value: string | number | null | undefined): number {
   return value === null || value === undefined ? 0 : Number(value);
 }
@@ -121,7 +119,7 @@ function NutrientBar({
 }
 
 export function NutritionPage() {
-  const [date] = useState(today());
+  const [date, setDate] = useState(todayLocal());
   const [nutrition, setNutrition] = useState<DailyNutrition | null>(null);
   const [items, setItems] = useState<MealItem[]>([]);
   const [history, setHistory] = useState<HistoryDay[]>([]);
@@ -140,6 +138,8 @@ export function NutritionPage() {
   const [plateOpen, setPlateOpen] = useState(false);
   // Bumped whenever food is logged, so dependent cards refetch.
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const isToday = date === todayLocal();
 
   const refresh = async () => {
     const [summaryRes, logRes, historyRes] = await Promise.all([
@@ -211,11 +211,14 @@ export function NutritionPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Nutrition</h1>
-        <p className="text-gray-500 text-sm">{date}</p>
+      </div>
+
+      <div className="card py-3">
+        <DatePicker date={date} onChange={setDate} />
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Today's targets</h2>
+        <h2 className="text-lg font-semibold mb-4">{isToday ? "Today's targets" : `Targets · ${friendlyDateLabel(date)}`}</h2>
         {!nutrition && <p className="text-gray-500 text-sm">Loading…</p>}
         {nutrition && (
           <div className="space-y-5">
@@ -402,7 +405,7 @@ export function NutritionPage() {
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Today's log</h2>
+        <h2 className="text-lg font-semibold mb-4">{isToday ? "Today's log" : `Log · ${friendlyDateLabel(date)}`}</h2>
         {items.length === 0 && <p className="text-gray-500 text-sm">Nothing logged yet today.</p>}
         <ul className="divide-y divide-gray-100">
           {items.map((item) => (
