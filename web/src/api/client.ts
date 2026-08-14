@@ -154,6 +154,16 @@ export const api = {
   updateGoal: (id: string, data: Record<string, unknown>) => request(http.put(`/goals/${id}`, data)),
   deleteGoal: (id: string) => request(http.delete(`/goals/${id}`)),
 
+  // Habits
+  getHabits: (date: string) => request(http.get('/habits', { params: { date } })),
+  getHabitsSummary: (date: string) => request(http.get('/habits/summary', { params: { date } })),
+  getHabitSuggestions: () => request(http.get('/habits/suggestions')),
+  createHabit: (data: Record<string, unknown>) => request(http.post('/habits', data)),
+  updateHabit: (id: string, data: Record<string, unknown>) => request(http.put(`/habits/${id}`, data)),
+  archiveHabit: (id: string) => request(http.delete(`/habits/${id}`)),
+  checkHabit: (id: string, date: string, count: number) =>
+    request(http.post(`/habits/${id}/check`, { date, count })),
+
   // Import from other apps
   previewImport: (csv: string, dayFirst: boolean) => request(http.post('/import/preview', { csv, dayFirst })),
   commitImport: (csv: string, dayFirst: boolean) => request(http.post('/import/commit', { csv, dayFirst })),

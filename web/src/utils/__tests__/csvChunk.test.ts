@@ -1,42 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { chunkCsv, splitCsvRows } from '../csvChunk';
 
-// Mirrors web/src/utils/csvChunk.ts
-function splitCsvRows(text: string): string[] {
-  const rows: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    if (char === '"') {
-      if (inQuotes && text[i + 1] === '"') { current += '""'; i += 1; continue; }
-      inQuotes = !inQuotes;
-      current += char;
-      continue;
-    }
-    if (!inQuotes && (char === '\n' || char === '\r')) {
-      if (char === '\r' && text[i + 1] === '\n') i += 1;
-      if (current.trim() !== '') rows.push(current);
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  if (current.trim() !== '') rows.push(current);
-  return rows;
-}
+describe('splitCsvRows', () => {
+  it('keeps a quoted newline inside one logical row', () => {
+    expect(splitCsvRows('a,b\n1,"x\ny"')).toHaveLength(2);
+  });
 
-function chunkCsv(text: string, rowsPerChunk = 500) {
-  const rows = splitCsvRows(text.replace(/^﻿/, ''));
-  if (rows.length === 0) return { chunks: [], totalDataRows: 0 };
-  const header = rows[0];
-  const dataRows = rows.slice(1);
-  if (dataRows.length === 0) return { chunks: [header], totalDataRows: 0 };
-  const chunks: string[] = [];
-  for (let i = 0; i < dataRows.length; i += rowsPerChunk) {
-    chunks.push([header, ...dataRows.slice(i, i + rowsPerChunk)].join('\n'));
-  }
-  return { chunks, totalDataRows: dataRows.length };
-}
+  it('handles CRLF line endings', () => {
+    expect(splitCsvRows('a,b\r\n1,2\r\n3,4')).toEqual(['a,b', '1,2', '3,4']);
+  });
+
+  it('strips blank lines', () => {
+    expect(splitCsvRows('a,b\n\n1,2\n\n')).toEqual(['a,b', '1,2']);
+  });
+});
 
 describe('chunkCsv', () => {
   it('gives every chunk the header so each is a valid CSV on its own', () => {
@@ -67,5 +44,13 @@ describe('chunkCsv', () => {
 
   it('handles a header-only file without crashing', () => {
     expect(chunkCsv('Date,Food').totalDataRows).toBe(0);
+  });
+
+  it('strips a UTF-8 BOM from the header', () => {
+    expect(chunkCsv('﻿Date,Food\n2026-08-01,Dal').chunks[0].split('\n')[0]).toBe('Date,Food');
+  });
+
+  it('returns nothing for an empty file', () => {
+    expect(chunkCsv('')).toEqual({ chunks: [], totalDataRows: 0 });
   });
 });

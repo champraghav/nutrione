@@ -14,6 +14,8 @@ const ICONS: Record<string, string> = {
   workout_completed: '💪',
   sleep_logged: '🌙',
   score_calculated: '📊',
+  hydration_logged: '💧',
+  habit_completed: '🔥',
 };
 
 function groupByDay(events: TimelineEvent[]): Array<[string, TimelineEvent[]]> {

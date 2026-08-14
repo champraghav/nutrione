@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Badge } from '@components/Badge';
+import { prepareImage } from '@utils/image';
 
 interface Nutrients {
   calories: number;
@@ -19,7 +20,9 @@ interface DetectedItem {
   quantity: number;
   unit: string;
   confidence: number;
+  portionNote: string | null;
   match: { id: string; name: string; serving_unit: string } | null;
+  matchScore: number | null;
   nutrients: Nutrients | null;
 }
 
@@ -50,6 +53,7 @@ export function PlateScanner({ date, mealType, onLogged, onClose }: PlateScanner
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [logging, setLogging] = useState(false);
+  const [elapsed, setElapsed] = useState<number | null>(null);
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,17 +61,16 @@ export function PlateScanner({ date, mealType, onLogged, onClose }: PlateScanner
 
     setError(null);
     setAnalysis(null);
-
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Could not read that file'));
-      reader.readAsDataURL(file);
-    });
-
-    setPreview(dataUrl);
     setAnalyzing(true);
-    const res = await api.analyzePhoto(dataUrl, file.type);
+
+    // Shrink before uploading. A phone photo is several megabytes and the
+    // upload, not the model, is what makes a scan feel slow.
+    const prepared = await prepareImage(file);
+    setPreview(prepared.dataUrl);
+
+    const started = performance.now();
+    const res = await api.analyzePhoto(prepared.dataUrl, prepared.mediaType);
+    setElapsed(Math.round(performance.now() - started));
     setAnalyzing(false);
 
     if (res.success) {
@@ -174,6 +177,22 @@ export function PlateScanner({ date, mealType, onLogged, onClose }: PlateScanner
                           {Math.round(item.confidence * 100)}%
                         </Badge>
                       </div>
+
+                      {/* Never hide a substitution: if we logged something other
+                          than what the camera saw, say so plainly. */}
+                      {item.match && item.match.name.toLowerCase() !== item.detectedName.toLowerCase() && (
+                        <p
+                          className={`text-xs mt-0.5 ${
+                            (item.matchScore ?? 1) < 0.5 ? 'text-warning-600' : 'text-gray-400'
+                          }`}
+                        >
+                          seen as "{item.detectedName}"
+                          {(item.matchScore ?? 1) < 0.5 && ' — loose match, check this one'}
+                        </p>
+                      )}
+
+                      {item.portionNote && <p className="text-xs text-gray-400 mt-0.5">{item.portionNote}</p>}
+
                       {item.nutrients ? (
                         <p className="text-xs text-gray-500 mt-1">
                           {item.nutrients.calories} kcal · {item.nutrients.protein_g}g protein ·{' '}
@@ -215,6 +234,7 @@ export function PlateScanner({ date, mealType, onLogged, onClose }: PlateScanner
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 Portions are estimates from the photo — adjust the numbers above before logging.
+                {elapsed !== null && ` Scanned in ${(elapsed / 1000).toFixed(1)}s.`}
               </p>
             </div>
           )}

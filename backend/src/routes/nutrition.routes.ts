@@ -14,7 +14,7 @@ nutritionRouter.get('/foods', async (req, res, next) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-    const foods = await nutritionService.searchFoods(q, limit);
+    const foods = await nutritionService.searchFoods(req.userId, q, limit);
     res.json({ success: true, data: foods });
   } catch (err) {
     next(err);
@@ -32,7 +32,7 @@ nutritionRouter.get('/foods/barcode/:barcode', async (req, res, next) => {
 
 nutritionRouter.get('/foods/:id', async (req, res, next) => {
   try {
-    const food = await nutritionService.getFoodById(req.params.id);
+    const food = await nutritionService.getFoodById(req.userId, req.params.id);
     res.json({ success: true, data: food });
   } catch (err) {
     next(err);
@@ -130,7 +130,7 @@ nutritionRouter.post('/analyze-photo', validate(analyzePhotoSchema), async (req,
       base64 = dataUrl[2];
     }
 
-    const analysis = await visionService.analyzePhoto(base64, type);
+    const analysis = await visionService.analyzePhoto(req.userId, base64, type);
     res.json({ success: true, data: analysis });
   } catch (err) {
     next(err);

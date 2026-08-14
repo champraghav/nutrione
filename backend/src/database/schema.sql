@@ -138,6 +138,26 @@ CREATE TABLE IF NOT EXISTS foods (
 );
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS barcode TEXT UNIQUE;
 ALTER TABLE foods ADD COLUMN IF NOT EXISTS saturated_fat_g NUMERIC(8,2) DEFAULT 0;
+
+-- Weight of one serving in grams. Without this, converting a photo's gram
+-- estimate into pieces has to guess an average piece weight, which is wrong
+-- by 2x for anything as light as an idli or as heavy as a masala dosa.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS serving_grams NUMERIC(8,2);
+
+-- Foods created by importing someone's CSV export belong to that person.
+-- NULL means a shared reference food that everyone can search.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_foods_owner ON foods(owner_user_id);
+
+-- Imported foods created before ownership existed are unowned, which would
+-- leave them visible to everyone. Attribute each to whoever actually logged
+-- meals against it. Idempotent: it only ever touches still-unowned rows.
+UPDATE foods f
+SET owner_user_id = m.user_id
+FROM (SELECT DISTINCT ON (food_id) food_id, user_id FROM meal_items ORDER BY food_id, id) m
+WHERE f.id = m.food_id
+  AND f.region = 'imported'
+  AND f.owner_user_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_foods_name_trgm ON foods USING gin (name gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS nutrition_logs (
@@ -340,3 +360,34 @@ CREATE TABLE IF NOT EXISTS user_consents (
   granted BOOLEAN NOT NULL DEFAULT true,
   granted_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================
+-- HABITS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS habits (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL DEFAULT '✅',
+  cadence TEXT NOT NULL DEFAULT 'daily' CHECK (cadence IN ('daily', 'weekly')),
+  target_per_day INTEGER NOT NULL DEFAULT 1 CHECK (target_per_day BETWEEN 1 AND 50),
+  days_of_week INTEGER[],
+  reminder_time TIME,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id, archived_at, sort_order);
+
+CREATE TABLE IF NOT EXISTS habit_entries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  habit_id UUID NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL,
+  count INTEGER NOT NULL DEFAULT 1 CHECK (count >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (habit_id, log_date)
+);
+CREATE INDEX IF NOT EXISTS idx_habit_entries_habit ON habit_entries(habit_id, log_date DESC);
+CREATE INDEX IF NOT EXISTS idx_habit_entries_user_date ON habit_entries(user_id, log_date DESC);

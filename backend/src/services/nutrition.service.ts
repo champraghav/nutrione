@@ -10,6 +10,7 @@ export interface Food {
   region: string;
   serving_size: number;
   serving_unit: string;
+  serving_grams: number | null;
   calories: number;
   protein_g: number;
   carbs_g: number;
@@ -19,23 +20,40 @@ export interface Food {
   sodium_mg: number | null;
   saturated_fat_g: number | null;
   barcode: string | null;
+  owner_user_id: string | null;
 }
 
-export async function searchFoods(searchTerm: string, limit = 20): Promise<Food[]> {
+/**
+ * Foods visible to a user: the shared reference database plus anything their
+ * own import created. Foods imported from someone else's export carry their
+ * own numbers and their own naming, so they must never surface in another
+ * person's search results.
+ */
+const VISIBLE_TO_USER = '(owner_user_id IS NULL OR owner_user_id = $1)';
+
+export async function searchFoods(userId: string, searchTerm: string, limit = 20): Promise<Food[]> {
   if (!searchTerm.trim()) {
-    return query<Food>('SELECT * FROM foods ORDER BY name ASC LIMIT $1', [limit]);
+    return query<Food>(
+      `SELECT * FROM foods WHERE ${VISIBLE_TO_USER} ORDER BY name ASC LIMIT $2`,
+      [userId, limit]
+    );
   }
   return query<Food>(
     `SELECT * FROM foods
-     WHERE name ILIKE $1 OR name_hi ILIKE $1
-     ORDER BY similarity(name, $2) DESC, name ASC
-     LIMIT $3`,
-    [`%${searchTerm}%`, searchTerm, limit]
+     WHERE ${VISIBLE_TO_USER}
+       AND (name ILIKE $2 OR name_hi ILIKE $2)
+     ORDER BY similarity(name, $3) DESC, name ASC
+     LIMIT $4`,
+    [userId, `%${searchTerm}%`, searchTerm, limit]
   );
 }
 
-export async function getFoodById(id: string): Promise<Food> {
-  const food = await queryOne<Food>('SELECT * FROM foods WHERE id = $1', [id]);
+export async function getFoodById(userId: string, id: string): Promise<Food> {
+  const food = await queryOne<Food>(
+    `SELECT * FROM foods
+     WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)`,
+    [id, userId]
+  );
   if (!food) throw AppError.notFound('Food not found');
   return food;
 }
@@ -173,7 +191,7 @@ export interface AddMealItemInput {
 }
 
 export async function addMealItem(userId: string, input: AddMealItemInput) {
-  const food = await getFoodById(input.foodId);
+  const food = await getFoodById(userId, input.foodId);
   const ratio = input.quantity / food.serving_size;
 
   const item = await queryOne(
@@ -384,7 +402,8 @@ export async function getNutrientGaps(userId: string, logDate: string): Promise<
     // rather than just "eat a lot of this".
     const candidates = await query<Food>(
       `SELECT * FROM foods
-       WHERE ${cfg.column} > 0
+       WHERE owner_user_id IS NULL
+         AND ${cfg.column} > 0
          AND calories > 0
          AND calories <= $1
        ORDER BY (${cfg.column} / NULLIF(calories, 0)) DESC

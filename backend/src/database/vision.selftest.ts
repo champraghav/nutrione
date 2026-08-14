@@ -27,6 +27,8 @@ const MODEL_REPLY = {
   ],
 };
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
 async function main() {
   env.anthropicApiKey = 'test-key-for-selftest';
 
@@ -42,7 +44,11 @@ async function main() {
   }) as typeof fetch;
 
   const { analyzePhoto } = await import('../services/vision.service');
-  const result = await analyzePhoto('ZmFrZS1pbWFnZS1ieXRlcw==', 'image/jpeg');
+  // A user id that owns no imported foods, so this exercises the shared
+  // reference database exactly as a new account would see it.
+  const { queryOne } = await import('../config/database');
+  const anyUser = await queryOne<{ id: string }>('SELECT id FROM users LIMIT 1');
+  const result = await analyzePhoto(anyUser?.id ?? NIL_UUID, 'ZmFrZS1pbWFnZS1ieXRlcw==', 'image/jpeg');
 
   console.log('\n=== DETECTED ITEMS ===');
   for (const item of result.items) {

@@ -4,6 +4,7 @@ import { api } from '@api/client';
 import { useAppStore } from '@store/app.store';
 import { getHealthScoreStatus } from '@utils/formatters';
 import { Badge } from '@components/Badge';
+import { HabitsCard } from '@components/HabitsCard';
 
 interface ScoreBreakdown {
   overall_score: number;
@@ -97,6 +98,8 @@ export function DashboardPage() {
 
         {!loading && !score && <p className="text-gray-500">No score yet. Log some data to see your score.</p>}
       </div>
+
+      <HabitsCard />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {QUICK_LINKS.map((link) => (

@@ -15,6 +15,7 @@ import { SettingsPage } from '@pages/SettingsPage';
 import { LibraryPage } from '@pages/LibraryPage';
 import { VitalsPage } from '@pages/VitalsPage';
 import { ImportPage } from '@pages/ImportPage';
+import { HabitsPage } from '@pages/HabitsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const user = useAppStore((state) => state.user);
@@ -45,6 +46,7 @@ export default function App() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
+          <Route path="/habits" element={<HabitsPage />} />
           <Route path="/fitness" element={<FitnessPage />} />
           <Route path="/sleep" element={<SleepPage />} />
           <Route path="/coach" element={<ChatPage />} />

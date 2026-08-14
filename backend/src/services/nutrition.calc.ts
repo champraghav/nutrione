@@ -118,10 +118,26 @@ export function calculateHydrationTarget(weightKg: number | null, activityLevel:
  */
 export const APPROX_GRAMS_PER_PIECE = 80;
 
-export function portionFromGrams(grams: number, servingUnit: string, servingSize: number): number {
+export function portionFromGrams(
+  grams: number,
+  servingUnit: string,
+  servingSize: number,
+  servingGrams?: number | null
+): number {
   const isPiece = servingUnit !== 'g' && servingUnit !== 'ml';
   if (!isPiece) return grams;
-  return Math.max(1, Math.round(grams / APPROX_GRAMS_PER_PIECE));
+
+  // Prefer the food's own weight per serving. Falling back to one average
+  // piece weight for everything is what made a 150 g masala dosa log as two
+  // dosas and a 40 g idli log as one — off by 2x in opposite directions.
+  const perServing = Number(servingGrams) > 0 ? Number(servingGrams) : APPROX_GRAMS_PER_PIECE;
+  const size = Number(servingSize) > 0 ? Number(servingSize) : 1;
+
+  // Round to halves, so half a paratha is expressible but we never invent
+  // spurious precision like 1.37 dosas.
+  const servings = grams / perServing;
+  const rounded = Math.round(servings * 2) / 2;
+  return Math.max(0.5, rounded) * size;
 }
 
 /**

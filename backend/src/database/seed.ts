@@ -47,6 +47,7 @@ async function seed(): Promise<void> {
       food.region,
       food.serving_size,
       food.serving_unit,
+      food.serving_grams,
       food.calories,
       food.protein_g,
       food.carbs_g,
@@ -59,12 +60,15 @@ async function seed(): Promise<void> {
 
     // Update first so re-running the seed backfills nutrients onto foods that
     // were created before those columns existed, rather than skipping them.
+    // Scoped to shared foods: a user's imported row can share a name with a
+    // reference food, and overwriting their numbers would silently rewrite
+    // their own logged history.
     const res = await pool.query(
       `UPDATE foods SET
-         name_hi = $2, region = $3, serving_size = $4, serving_unit = $5,
-         calories = $6, protein_g = $7, carbs_g = $8, fat_g = $9,
-         fiber_g = $10, sugar_g = $11, sodium_mg = $12, saturated_fat_g = $13
-       WHERE name = $1 AND barcode IS NULL`,
+         name_hi = $2, region = $3, serving_size = $4, serving_unit = $5, serving_grams = $6,
+         calories = $7, protein_g = $8, carbs_g = $9, fat_g = $10,
+         fiber_g = $11, sugar_g = $12, sodium_mg = $13, saturated_fat_g = $14
+       WHERE name = $1 AND barcode IS NULL AND owner_user_id IS NULL`,
       values
     );
 
@@ -72,9 +76,9 @@ async function seed(): Promise<void> {
       updated += res.rowCount;
     } else {
       await pool.query(
-        `INSERT INTO foods (name, name_hi, region, serving_size, serving_unit, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
-         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-         WHERE NOT EXISTS (SELECT 1 FROM foods WHERE name = $1)`,
+        `INSERT INTO foods (name, name_hi, region, serving_size, serving_unit, serving_grams, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+         WHERE NOT EXISTS (SELECT 1 FROM foods WHERE name = $1 AND owner_user_id IS NULL)`,
         values
       );
       inserted += 1;

@@ -150,16 +150,39 @@ describe('calculateHydrationTarget', () => {
 describe('portionFromGrams', () => {
   it('converts a gram estimate into a piece count for piece-based foods', () => {
     // The bug this guards: 160 g of dosa logging as 160 dosas.
-    expect(portionFromGrams(160, 'piece', 1)).toBe(2);
+    expect(portionFromGrams(160, 'piece', 1, 80)).toBe(2);
+  });
+
+  it('uses the food\'s own weight, not one average for everything', () => {
+    // A masala dosa weighs 150 g and an idli 40 g. Against a flat 80 g/piece
+    // the dosa logged as 2 (double the calories) and 3 idlis logged as 2.
+    expect(portionFromGrams(150, 'piece', 1, 150)).toBe(1);
+    expect(portionFromGrams(120, 'piece', 1, 40)).toBe(3);
+  });
+
+  it('allows half portions but invents no finer precision', () => {
+    expect(portionFromGrams(60, 'piece', 1, 40)).toBe(1.5);
+    expect(portionFromGrams(55, 'piece', 1, 40)).toBe(1.5);
   });
 
   it('never rounds a real portion down to zero pieces', () => {
-    expect(portionFromGrams(10, 'piece', 1)).toBe(1);
+    expect(portionFromGrams(10, 'piece', 1, 150)).toBe(0.5);
+    expect(portionFromGrams(1, 'piece', 1, 150)).toBe(0.5);
+  });
+
+  it('falls back to an average piece weight when the food has none recorded', () => {
+    expect(portionFromGrams(160, 'piece', 1, null)).toBe(2);
+    expect(portionFromGrams(160, 'piece', 1)).toBe(2);
+  });
+
+  it('scales by the serving size when a serving is several pieces', () => {
+    // "Idli, 3 pieces" is one serving of 3; 240 g is 2 such servings.
+    expect(portionFromGrams(240, 'serving', 3, 120)).toBe(6);
   });
 
   it('passes grams and millilitres through untouched', () => {
-    expect(portionFromGrams(150, 'g', 100)).toBe(150);
-    expect(portionFromGrams(250, 'ml', 250)).toBe(250);
+    expect(portionFromGrams(150, 'g', 100, 100)).toBe(150);
+    expect(portionFromGrams(250, 'ml', 250, 250)).toBe(250);
   });
 });
 

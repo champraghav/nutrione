@@ -209,19 +209,24 @@ export function buildPreview(csvText: string, dayFirst = false): ImportPreview {
  * database: the export already states what that item contained, and
  * substituting our numbers would quietly rewrite the user's history.
  */
-async function findOrCreateImportedFood(row: NutritionRow): Promise<string> {
+/**
+ * Imported foods carry the exact numbers from someone's export, including
+ * their own naming and any errors in it, so they are owned by the person who
+ * imported them and are invisible to everyone else.
+ */
+async function findOrCreateImportedFood(userId: string, row: NutritionRow): Promise<string> {
   const existing = await queryOne<{ id: string }>(
     `SELECT id FROM foods
-     WHERE name = $1 AND region = 'imported'
+     WHERE name = $1 AND region = 'imported' AND owner_user_id = $6
        AND calories = $2 AND protein_g = $3 AND carbs_g = $4 AND fat_g = $5
      LIMIT 1`,
-    [row.food, row.calories, row.protein_g, row.carbs_g, row.fat_g]
+    [row.food, row.calories, row.protein_g, row.carbs_g, row.fat_g, userId]
   );
   if (existing) return existing.id;
 
   const created = await queryOne<{ id: string }>(
-    `INSERT INTO foods (name, region, serving_size, serving_unit, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
-     VALUES ($1, 'imported', 1, 'serving', $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO foods (name, region, owner_user_id, serving_size, serving_unit, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
+     VALUES ($1, 'imported', $10, 1, 'serving', $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       row.food,
@@ -233,6 +238,7 @@ async function findOrCreateImportedFood(row: NutritionRow): Promise<string> {
       row.sugar_g,
       row.sodium_mg,
       row.saturated_fat_g,
+      userId,
     ]
   );
   return created!.id;
@@ -259,7 +265,7 @@ export async function commitImport(
 
   if (preview.kind === 'nutrition') {
     for (const row of preview.rows as NutritionRow[]) {
-      const foodId = await findOrCreateImportedFood(row);
+      const foodId = await findOrCreateImportedFood(userId, row);
 
       const dupe = await queryOne(
         `SELECT id FROM meal_items
