@@ -375,3 +375,113 @@ export async function getDailyNutrition(userId: string, logDate: string): Promis
 
   return { date: logDate, consumed, targets, remaining };
 }
+
+export interface NutrientGap {
+  nutrient: 'protein_g' | 'fiber_g' | 'calories';
+  label: string;
+  shortBy: number;
+  unit: string;
+  /** Concrete ways to close the gap, drawn from the food database. */
+  suggestions: Array<{
+    foodId: string;
+    name: string;
+    /** A realistic portion, in the food's own serving unit. */
+    quantity: number;
+    unit: string;
+    calories: number;
+    /** How much of the nutrient that portion provides. */
+    delivers: number;
+    /** What share of the outstanding gap this portion closes, 0-100. */
+    closesGapPct: number;
+  }>;
+}
+
+const GAP_CONFIG: Array<{
+  nutrient: NutrientGap['nutrient'];
+  column: string;
+  label: string;
+  unit: string;
+  /** Ignore trivial gaps — nobody needs a suggestion for 3g of protein. */
+  minGap: number;
+  /** Don't suggest a food if closing the gap with it costs more than this. */
+  maxCaloriesPerServing: number;
+}> = [
+  { nutrient: 'protein_g', column: 'protein_g', label: 'Protein', unit: 'g', minGap: 10, maxCaloriesPerServing: 400 },
+  { nutrient: 'fiber_g', column: 'fiber_g', label: 'Fiber', unit: 'g', minGap: 5, maxCaloriesPerServing: 300 },
+];
+
+/**
+ * Answers "what am I missing today, and what should I eat to fix it?" —
+ * finds the nutrients still short of target and picks dense, reasonable
+ * foods from the database that would close each gap, with the portion
+ * needed and what that portion costs in calories.
+ */
+export async function getNutrientGaps(userId: string, logDate: string): Promise<NutrientGap[]> {
+  const daily = await getDailyNutrition(userId, logDate);
+  const gaps: NutrientGap[] = [];
+
+  for (const cfg of GAP_CONFIG) {
+    const shortBy = daily.remaining[cfg.nutrient];
+    if (shortBy < cfg.minGap) continue;
+
+    // Rank by nutrient density per calorie so suggestions are efficient
+    // rather than just "eat a lot of this".
+    const candidates = await query<Food>(
+      `SELECT * FROM foods
+       WHERE ${cfg.column} > 0
+         AND calories > 0
+         AND calories <= $1
+       ORDER BY (${cfg.column} / NULLIF(calories, 0)) DESC
+       LIMIT 6`,
+      [cfg.maxCaloriesPerServing]
+    );
+
+    const suggestions = candidates
+      .map((food) => {
+        const perServing = Number(food[cfg.nutrient === 'protein_g' ? 'protein_g' : 'fiber_g'] ?? 0);
+        if (perServing <= 0) return null;
+
+        const servingSize = Number(food.serving_size) || 1;
+        const isPiece = food.serving_unit !== 'g' && food.serving_unit !== 'ml';
+
+        // Suggest a realistic helping rather than however much would close the
+        // whole gap in one food — "33 egg whites" is arithmetically correct and
+        // completely useless. Cap at 2 servings and report the share it covers.
+        const servingsNeeded = shortBy / perServing;
+        const servings = Math.min(servingsNeeded, 2);
+
+        const quantity = isPiece
+          ? Math.max(1, Math.round(servings * servingSize))
+          : Math.max(1, Math.round((servings * servingSize) / 5) * 5);
+
+        const ratio = quantity / servingSize;
+        const delivers = Math.round(perServing * ratio * 10) / 10;
+
+        return {
+          foodId: food.id,
+          name: food.name,
+          quantity,
+          unit: food.serving_unit,
+          calories: Math.round(Number(food.calories) * ratio),
+          delivers,
+          closesGapPct: Math.min(100, Math.round((delivers / shortBy) * 100)),
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      // Most gap closed per calorie spent.
+      .sort((a, b) => b.delivers / Math.max(1, b.calories) - a.delivers / Math.max(1, a.calories))
+      .slice(0, 3);
+
+    if (suggestions.length > 0) {
+      gaps.push({
+        nutrient: cfg.nutrient,
+        label: cfg.label,
+        shortBy: Math.round(shortBy * 10) / 10,
+        unit: cfg.unit,
+        suggestions,
+      });
+    }
+  }
+
+  return gaps;
+}

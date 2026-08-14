@@ -1,5 +1,6 @@
 import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { getHydrationTarget } from './hydration.service';
 
 const WEIGHTS = {
   sleep: 0.2,
@@ -57,11 +58,15 @@ async function scoreRecovery(userId: string, date: string): Promise<number> {
 }
 
 async function scoreHydration(userId: string, date: string): Promise<number> {
-  const log = await queryOne<{ total_ml: number }>(
-    'SELECT total_ml FROM hydration_logs WHERE user_id = $1 AND log_date = $2',
-    [userId, date]
-  );
-  const targetMl = 2500;
+  // Uses the same personalised target the hydration page shows, so the score
+  // and the "x of y ml" the user sees can never disagree.
+  const [log, targetMl] = await Promise.all([
+    queryOne<{ total_ml: number }>('SELECT total_ml FROM hydration_logs WHERE user_id = $1 AND log_date = $2', [
+      userId,
+      date,
+    ]),
+    getHydrationTarget(userId),
+  ]);
   return clamp(((log?.total_ml ?? 0) / targetMl) * 100);
 }
 

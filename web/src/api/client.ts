@@ -140,6 +140,13 @@ export const api = {
     request(http.post('/nutrition/analyze-photo', { image, mediaType })),
   bulkLogMeals: (date: string, items: Array<{ foodId: string; quantity: number; unit: string }>, mealType?: string) =>
     request(http.post('/nutrition/meals/bulk', { date, items, mealType })),
+  getNutrientGaps: (date: string) => request(http.get('/nutrition/gaps', { params: { date } })),
+
+  // Hydration
+  getHydration: (date?: string) => request(http.get('/hydration', { params: { date } })),
+  addWater: (amountMl: number, date?: string) => request(http.post('/hydration', { amountMl, date })),
+  removeWaterEntry: (id: string) => request(http.delete(`/hydration/${id}`)),
+  getHydrationHistory: (days = 14) => request(http.get('/hydration/history', { params: { days } })),
   getNutritionLog: (date: string) => request(http.get('/nutrition/logs', { params: { date } })),
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),

@@ -6,6 +6,8 @@ import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { BarcodeScanner } from '@components/BarcodeScanner';
 import { PlateScanner } from '@components/PlateScanner';
+import { HydrationCard } from '@components/HydrationCard';
+import { NutrientGapsCard } from '@components/NutrientGapsCard';
 import { capitalize, formatDate } from '@utils/formatters';
 
 interface Food {
@@ -136,6 +138,8 @@ export function NutritionPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [plateOpen, setPlateOpen] = useState(false);
+  // Bumped whenever food is logged, so dependent cards refetch.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = async () => {
     const [summaryRes, logRes, historyRes] = await Promise.all([
@@ -146,6 +150,7 @@ export function NutritionPage() {
     if (summaryRes.success) setNutrition(summaryRes.data as DailyNutrition);
     if (logRes.success) setItems(logRes.data as MealItem[]);
     if (historyRes.success) setHistory((historyRes.data as HistoryDay[]).slice().reverse());
+    setRefreshKey((k) => k + 1);
   };
 
   useEffect(() => {
@@ -252,6 +257,10 @@ export function NutritionPage() {
           </div>
         )}
       </div>
+
+      <NutrientGapsCard date={date} refreshKey={refreshKey} onLogged={refresh} />
+
+      <HydrationCard date={date} />
 
       <div className="card">
         <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">

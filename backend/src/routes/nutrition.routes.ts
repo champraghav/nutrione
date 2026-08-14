@@ -59,6 +59,16 @@ nutritionRouter.get('/summary', async (req, res, next) => {
   }
 });
 
+nutritionRouter.get('/gaps', async (req, res, next) => {
+  try {
+    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    const gaps = await nutritionService.getNutrientGaps(req.userId, date);
+    res.json({ success: true, data: gaps });
+  } catch (err) {
+    next(err);
+  }
+});
+
 nutritionRouter.get('/history', async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days as string, 10) : 30;
