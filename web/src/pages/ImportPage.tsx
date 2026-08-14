@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
 import { Badge } from '@components/Badge';
+import { chunkCsv } from '@utils/csvChunk';
 
 interface Preview {
   kind: 'nutrition' | 'weight' | 'exercise';
@@ -11,6 +12,8 @@ interface Preview {
   skipped: Array<{ line: number; reason: string }>;
   dateRange: { from: string; to: string } | null;
   sample: Array<Record<string, string | number>>;
+  partial?: boolean;
+  chunkCount?: number;
 }
 
 interface Result {
@@ -35,15 +38,37 @@ export function ImportPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const analyse = async (text: string, useDayFirst: boolean) => {
     setBusy(true);
     setError(null);
     setResult(null);
-    const res = await api.previewImport(text, useDayFirst);
+
+    // Preview only the first chunk — enough to detect the format and show a
+    // sample — so a huge export doesn't have to be uploaded just to look at it.
+    const { chunks, totalDataRows } = chunkCsv(text);
+    if (chunks.length === 0) {
+      setBusy(false);
+      setPreview(null);
+      setError('That file appears to be empty.');
+      return;
+    }
+
+    const res = await api.previewImport(chunks[0], useDayFirst);
     setBusy(false);
-    if (res.success) setPreview(res.data as Preview);
-    else {
+    if (res.success) {
+      const p = res.data as Preview;
+      const sampled = p.totalRows;
+      setPreview({
+        ...p,
+        totalRows: totalDataRows,
+        // Scale the estimate when we only inspected part of the file.
+        validRows: chunks.length > 1 ? Math.round((p.validRows / Math.max(1, sampled)) * totalDataRows) : p.validRows,
+        partial: chunks.length > 1,
+        chunkCount: chunks.length,
+      });
+    } else {
       setPreview(null);
       setError(res.error?.message ?? 'Could not read that file.');
     }
@@ -67,15 +92,39 @@ export function ImportPage() {
     if (!csv) return;
     setBusy(true);
     setError(null);
-    const res = await api.commitImport(csv, dayFirst);
-    setBusy(false);
-    if (res.success) {
-      setResult(res.data as Result);
-      setPreview(null);
-      setCsv(null);
-    } else {
-      setError(res.error?.message ?? 'Import failed.');
+
+    const { chunks } = chunkCsv(csv);
+    setProgress({ done: 0, total: chunks.length });
+
+    let imported = 0;
+    let duplicatesSkipped = 0;
+    const dates = new Set<string>();
+    let kind = '';
+
+    for (let i = 0; i < chunks.length; i += 1) {
+      const res = await api.commitImport(chunks[i], dayFirst);
+      if (!res.success) {
+        setBusy(false);
+        setProgress(null);
+        setError(
+          `${res.error?.message ?? 'Import failed.'} ` +
+            (imported > 0 ? `${imported} entries were imported before this point and have been kept.` : '')
+        );
+        return;
+      }
+      const d = res.data as Result;
+      imported += d.imported;
+      duplicatesSkipped += d.duplicatesSkipped;
+      d.datesTouched?.forEach((x) => dates.add(x));
+      kind = d.kind;
+      setProgress({ done: i + 1, total: chunks.length });
     }
+
+    setBusy(false);
+    setProgress(null);
+    setResult({ imported, duplicatesSkipped, kind, datesTouched: Array.from(dates) });
+    setPreview(null);
+    setCsv(null);
   };
 
   return (
@@ -136,7 +185,7 @@ export function ImportPage() {
               <p className="text-xl font-semibold">{preview.totalRows}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Will import</p>
+              <p className="text-xs text-gray-500">Will import{preview.partial ? ' (est.)' : ''}</p>
               <p className="text-xl font-semibold text-success-600">{preview.validRows}</p>
             </div>
             <div>
@@ -189,6 +238,27 @@ export function ImportPage() {
                 ))}
               </ul>
             </details>
+          )}
+
+          {preview.partial && (
+            <p className="text-xs text-gray-500">
+              Large file — it'll be uploaded in {preview.chunkCount} batches. The preview above samples the first
+              batch; every row still gets imported.
+            </p>
+          )}
+
+          {progress && (
+            <div>
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-1">
+                <div
+                  className="h-full rounded-full bg-primary-600 transition-smooth"
+                  style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Importing batch {progress.done} of {progress.total}…
+              </p>
+            </div>
           )}
 
           <div className="flex items-center gap-3">
