@@ -5,6 +5,7 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { formatDate, calculateBMI } from '@utils/formatters';
+import { GoalsCard } from '@components/GoalsCard';
 
 interface Metric {
   id: string;
@@ -98,6 +99,8 @@ export function VitalsPage() {
           Log weight, mood, and vitals — these feed the wellbeing and vitals parts of your health score.
         </p>
       </div>
+
+      <GoalsCard />
 
       <form onSubmit={onSubmit} className="card space-y-4">
         <h2 className="text-lg font-semibold">Log a reading</h2>

@@ -147,6 +147,12 @@ export const api = {
   addWater: (amountMl: number, date?: string) => request(http.post('/hydration', { amountMl, date })),
   removeWaterEntry: (id: string) => request(http.delete(`/hydration/${id}`)),
   getHydrationHistory: (days = 14) => request(http.get('/hydration/history', { params: { days } })),
+
+  // Goals
+  getGoals: (status?: string) => request(http.get('/goals', { params: { status } })),
+  createGoal: (data: Record<string, unknown>) => request(http.post('/goals', data)),
+  updateGoal: (id: string, data: Record<string, unknown>) => request(http.put(`/goals/${id}`, data)),
+  deleteGoal: (id: string) => request(http.delete(`/goals/${id}`)),
   getNutritionLog: (date: string) => request(http.get('/nutrition/logs', { params: { date } })),
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),
