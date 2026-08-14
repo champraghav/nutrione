@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/sleep', label: 'Sleep' },
   { to: '/library', label: 'Library' },
   { to: '/coach', label: 'AI Coach' },
+  { to: '/vitals', label: 'Vitals' },
   { to: '/timeline', label: 'Timeline' },
   { to: '/profile', label: 'Profile' },
   { to: '/settings', label: 'Settings' },
@@ -23,9 +24,9 @@ export function Layout() {
       <nav className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center justify-between">
-            <div className="flex items-center gap-6">
-              <span className="text-lg font-bold text-primary-700">Health OS</span>
-              <div className="hidden sm:flex items-center gap-1 overflow-x-auto">
+            <div className="flex items-center gap-4 min-w-0">
+              <span className="text-lg font-bold text-primary-700 shrink-0">Health OS</span>
+              <div className="hidden sm:flex items-center gap-0.5 overflow-x-auto min-w-0">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
                     key={item.to}
@@ -43,8 +44,8 @@ export function Layout() {
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {user && <span className="text-sm text-gray-500 hidden sm:inline">{user.email}</span>}
+            <div className="flex items-center gap-3 shrink-0">
+              {user && <span className="text-sm text-gray-500 hidden 2xl:inline">{user.email}</span>}
               <button className="btn-secondary text-xs" onClick={logout}>
                 Log out
               </button>
