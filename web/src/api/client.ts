@@ -153,6 +153,10 @@ export const api = {
   createGoal: (data: Record<string, unknown>) => request(http.post('/goals', data)),
   updateGoal: (id: string, data: Record<string, unknown>) => request(http.put(`/goals/${id}`, data)),
   deleteGoal: (id: string) => request(http.delete(`/goals/${id}`)),
+
+  // Import from other apps
+  previewImport: (csv: string, dayFirst: boolean) => request(http.post('/import/preview', { csv, dayFirst })),
+  commitImport: (csv: string, dayFirst: boolean) => request(http.post('/import/commit', { csv, dayFirst })),
   getNutritionLog: (date: string) => request(http.get('/nutrition/logs', { params: { date } })),
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),

@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/vitals', label: 'Vitals' },
   { to: '/timeline', label: 'Timeline' },
   { to: '/profile', label: 'Profile' },
+  { to: '/import', label: 'Import' },
   { to: '/settings', label: 'Settings' },
 ];
 

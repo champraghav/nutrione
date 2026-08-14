@@ -8,6 +8,7 @@ import { healthRouter } from './health.routes';
 import { aiRouter } from './ai.routes';
 import { hydrationRouter } from './hydration.routes';
 import { goalsRouter } from './goals.routes';
+import { importRouter } from './import.routes';
 
 export const apiRouter = Router();
 
@@ -18,5 +19,6 @@ apiRouter.use('/fitness', fitnessRouter);
 apiRouter.use('/sleep', sleepRouter);
 apiRouter.use('/hydration', hydrationRouter);
 apiRouter.use('/goals', goalsRouter);
+apiRouter.use('/import', importRouter);
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/ai', aiRouter);

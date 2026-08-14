@@ -92,6 +92,18 @@ curl -X POST $BASE/auth/logout -H "Content-Type: application/json" \
 - `GET /health/profile`
 - `PUT /health/profile` — body: `{ dateOfBirth, sex, heightCm, weightKg, activityLevel }`
 
+## Import (from MyFitnessPal / HealthifyMe / GoQii etc.)
+
+These apps have no public consumer API, so migration is via their CSV export.
+
+- `POST /import/preview` — body: `{ csv, dayFirst? }`. Detects whether the
+  file is a food diary, weight history or exercise log from its headers,
+  maps the columns, and returns the parsed rows plus anything skipped and
+  why. Writes nothing.
+- `POST /import/commit` — same body; writes the rows. Re-running the same
+  export is safe: identical entries on the same date are skipped rather
+  than duplicated.
+
 ## AI Coach
 
 Requires Ollama running with `OLLAMA_MODEL` pulled. If Ollama is unreachable,

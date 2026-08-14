@@ -14,6 +14,7 @@ import { TimelinePage } from '@pages/TimelinePage';
 import { SettingsPage } from '@pages/SettingsPage';
 import { LibraryPage } from '@pages/LibraryPage';
 import { VitalsPage } from '@pages/VitalsPage';
+import { ImportPage } from '@pages/ImportPage';
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const user = useAppStore((state) => state.user);
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/vitals" element={<VitalsPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
