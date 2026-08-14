@@ -1,5 +1,6 @@
 import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { calculateHydrationTarget } from './nutrition.calc';
 
 export interface HydrationEntry {
   id: string;
@@ -26,15 +27,10 @@ export async function getHydrationTarget(userId: string): Promise<number> {
     'SELECT weight_kg, activity_level FROM profiles WHERE user_id = $1',
     [userId]
   );
-
-  const weight = profile?.weight_kg ? Number(profile.weight_kg) : null;
-  let target = weight ? Math.round(weight * 35) : 2500;
-
-  if (profile?.activity_level === 'active') target += 350;
-  if (profile?.activity_level === 'very_active') target += 700;
-
-  // Keep it in a sane range regardless of odd profile data.
-  return Math.min(5000, Math.max(1500, target));
+  return calculateHydrationTarget(
+    profile?.weight_kg ? Number(profile.weight_kg) : null,
+    profile?.activity_level ?? null
+  );
 }
 
 async function recalcTotal(userId: string, logDate: string): Promise<number> {

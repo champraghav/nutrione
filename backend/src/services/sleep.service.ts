@@ -1,5 +1,6 @@
 import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
+import { computeSleepDuration } from './nutrition.calc';
 
 export interface SleepSession {
   id: string;
@@ -26,11 +27,7 @@ function toTimestamp(date: string, time: string): Date {
   return new Date(`${dateOnly}T${time}:00`);
 }
 
-function computeDuration(bedtime: Date, wakeTime: Date): number {
-  let ms = wakeTime.getTime() - bedtime.getTime();
-  if (ms <= 0) ms += 24 * 60 * 60 * 1000; // crossed midnight
-  return Math.round(ms / 60000);
-}
+const computeDuration = computeSleepDuration;
 
 export async function logSleep(userId: string, input: LogSleepInput): Promise<SleepSession> {
   const bedtime = toTimestamp(input.date, input.bedtime);

@@ -12,15 +12,16 @@
     "seed": "tsx src/database/seed.ts",
     "migrate:prod": "node dist/database/migrate.js",
     "seed:prod": "node dist/database/seed.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "helmet": "^7.1.0",
     "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
     "ioredis": "^5.4.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
@@ -36,6 +37,7 @@
     "@types/node": "^20.14.15",
     "@types/pg": "^8.11.6",
     "tsx": "^4.16.5",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
   }
 }

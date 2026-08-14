@@ -1,6 +1,7 @@
 import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
+import { calculateTargets, calculateAge, sizeSuggestion, DailyTargets as PureTargets } from './nutrition.calc';
 
 export interface Food {
   id: string;
@@ -270,28 +271,6 @@ export interface DailyTargets {
   saturated_fat_g: number; // upper limit
 }
 
-const ACTIVITY_MULTIPLIERS: Record<string, number> = {
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  active: 1.725,
-  very_active: 1.9,
-};
-
-function calculateAge(dob: string): number | null {
-  const birth = new Date(dob);
-  if (Number.isNaN(birth.getTime())) return null;
-  const ageMs = Date.now() - birth.getTime();
-  return Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
-}
-
-/**
- * Computes daily nutrient targets from the user's profile using the
- * Mifflin-St Jeor equation for calorie needs, with generally-accepted
- * guideline values for macro split and limits. Falls back to reasonable
- * flat defaults when the profile is incomplete, so the feature is useful
- * from day one rather than requiring a fully filled-out profile first.
- */
 export async function getDailyTargets(userId: string): Promise<DailyTargets> {
   const profile = await queryOne<{
     weight_kg: string | number | null;
@@ -301,36 +280,13 @@ export async function getDailyTargets(userId: string): Promise<DailyTargets> {
     activity_level: string | null;
   }>('SELECT weight_kg, height_cm, date_of_birth, sex, activity_level FROM profiles WHERE user_id = $1', [userId]);
 
-  const weight = profile?.weight_kg ? Number(profile.weight_kg) : null;
-  const height = profile?.height_cm ? Number(profile.height_cm) : null;
-  const age = profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null;
-  const activityMultiplier = ACTIVITY_MULTIPLIERS[profile?.activity_level ?? 'moderate'] ?? 1.55;
-
-  let calories = 2000;
-  if (weight && height && age) {
-    const bmr =
-      profile?.sex === 'male'
-        ? 10 * weight + 6.25 * height - 5 * age + 5
-        : profile?.sex === 'female'
-          ? 10 * weight + 6.25 * height - 5 * age - 161
-          : 10 * weight + 6.25 * height - 5 * age - 78;
-    calories = Math.max(1200, Math.round(bmr * activityMultiplier));
-  }
-
-  const proteinG = weight ? Math.round(weight * 1.6) : 60;
-  const fatG = Math.round((calories * 0.3) / 9);
-  const carbsG = Math.max(0, Math.round((calories - proteinG * 4 - fatG * 9) / 4));
-
-  return {
-    calories,
-    protein_g: proteinG,
-    carbs_g: carbsG,
-    fat_g: fatG,
-    fiber_g: 28,
-    sugar_g: Math.round((calories * 0.1) / 4),
-    sodium_mg: 2300,
-    saturated_fat_g: Math.round((calories * 0.1) / 9),
-  };
+  return calculateTargets({
+    weightKg: profile?.weight_kg ? Number(profile.weight_kg) : null,
+    heightCm: profile?.height_cm ? Number(profile.height_cm) : null,
+    ageYears: profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null,
+    sex: profile?.sex ?? null,
+    activityLevel: profile?.activity_level ?? null,
+  });
 }
 
 export interface DailyNutrition {
@@ -439,36 +395,21 @@ export async function getNutrientGaps(userId: string, logDate: string): Promise<
     const suggestions = candidates
       .map((food) => {
         const perServing = Number(food[cfg.nutrient === 'protein_g' ? 'protein_g' : 'fiber_g'] ?? 0);
-        if (perServing <= 0) return null;
+        const sized = sizeSuggestion(shortBy, perServing, Number(food.serving_size) || 1, food.serving_unit);
+        if (!sized) return null;
 
-        const servingSize = Number(food.serving_size) || 1;
-        const isPiece = food.serving_unit !== 'g' && food.serving_unit !== 'ml';
-
-        // Suggest a realistic helping rather than however much would close the
-        // whole gap in one food — "33 egg whites" is arithmetically correct and
-        // completely useless. Cap at 2 servings and report the share it covers.
-        const servingsNeeded = shortBy / perServing;
-        const servings = Math.min(servingsNeeded, 2);
-
-        const quantity = isPiece
-          ? Math.max(1, Math.round(servings * servingSize))
-          : Math.max(1, Math.round((servings * servingSize) / 5) * 5);
-
-        const ratio = quantity / servingSize;
-        const delivers = Math.round(perServing * ratio * 10) / 10;
-
+        const ratio = sized.quantity / (Number(food.serving_size) || 1);
         return {
           foodId: food.id,
           name: food.name,
-          quantity,
+          quantity: sized.quantity,
           unit: food.serving_unit,
           calories: Math.round(Number(food.calories) * ratio),
-          delivers,
-          closesGapPct: Math.min(100, Math.round((delivers / shortBy) * 100)),
+          delivers: sized.delivers,
+          closesGapPct: sized.closesGapPct,
         };
       })
       .filter((s): s is NonNullable<typeof s> => s !== null)
-      // Most gap closed per calorie spent.
       .sort((a, b) => b.delivers / Math.max(1, b.calories) - a.delivers / Math.max(1, a.calories))
       .slice(0, 3);
 

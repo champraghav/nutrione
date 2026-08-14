@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { AppError } from '../utils/AppError';
 import { Food } from './nutrition.service';
+import { extractJsonObject, portionFromGrams } from './nutrition.calc';
 
 interface DetectedFoodRaw {
   name: string;
@@ -82,13 +83,7 @@ async function matchFood(name: string): Promise<Food | null> {
 }
 
 function extractJson(text: string): { foods: DetectedFoodRaw[] } {
-  // Models sometimes wrap JSON in prose or ```json fences despite instructions.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1] : text;
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('No JSON object found in model response');
-  return JSON.parse(candidate.slice(start, end + 1));
+  return extractJsonObject(text) as { foods: DetectedFoodRaw[] };
 }
 
 async function callVisionModel(imageBase64: string, mediaType: string): Promise<DetectedFoodRaw[]> {
@@ -188,9 +183,7 @@ export async function analyzePhoto(imageBase64: string, mediaType: string): Prom
     // Foods measured in pieces (1 dosa, 1 roti) need the gram estimate turned
     // into a count, otherwise "120 g of dosa" would log as 120 dosas.
     const servingSize = Number(match.serving_size) || 1;
-    const isPiece = match.serving_unit !== 'g' && match.serving_unit !== 'ml';
-    const APPROX_GRAMS_PER_PIECE = 80;
-    const quantity = isPiece ? Math.max(1, Math.round(grams / APPROX_GRAMS_PER_PIECE)) : grams;
+    const quantity = portionFromGrams(grams, match.serving_unit, servingSize);
     const ratio = quantity / servingSize;
 
     items.push({
