@@ -211,7 +211,15 @@ export const api = {
   assignPlan: (data: Record<string, unknown>) => request(http.post('/coach/assignments', data)),
   endAssignment: (id: string) => request(http.delete(`/coach/assignments/${id}`)),
 
+  getUnreadCounts: () => request(http.get('/coach/unread')),
+  getMessages: (coachClientId: string) => request(http.get(`/coach/clients/${coachClientId}/messages`)),
+  sendMessage: (coachClientId: string, body: string) =>
+    request(http.post(`/coach/clients/${coachClientId}/messages`, { body })),
+  getClientReport: (coachClientId: string, date: string) =>
+    request(http.get(`/coach/clients/${coachClientId}/report`, { params: { date } })),
+
   // Coaching - client side
+  getMyReport: (date: string) => request(http.get('/my-plan/report', { params: { date } })),
   getMyPlan: (date: string) => request(http.get('/my-plan', { params: { date } })),
   checkPlanItem: (itemId: string, date: string, done: boolean) =>
     request(http.post(`/my-plan/items/${itemId}/check`, { date, done })),

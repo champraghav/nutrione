@@ -17,6 +17,7 @@ export function ClientsPage() {
   const [error, setError] = useState('');
   /** Invite code for a client just added, shown once so the coach can send it. */
   const [newCode, setNewCode] = useState<{ name: string; code: string } | null>(null);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const date = todayLocal();
 
   const load = async () => {
@@ -27,6 +28,7 @@ export function ClientsPage() {
 
   useEffect(() => {
     load();
+    api.getUnreadCounts().then((r) => r.success && setUnread(r.data as Record<string, number>));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -131,6 +133,11 @@ export function ClientsPage() {
                       )}
                       {c.status === 'pending' && <Badge variant="warning">invite not accepted</Badge>}
                       {c.active_plans > 0 && <Badge variant="primary">{c.active_plans} plan</Badge>}
+                      {unread[c.coach_client_id] > 0 && (
+                        <Badge variant="danger">
+                          {unread[c.coach_client_id]} new message{unread[c.coach_client_id] === 1 ? '' : 's'}
+                        </Badge>
+                      )}
                     </div>
 
                     {c.status === 'active' ? (

@@ -53,6 +53,14 @@ myPlanRouter.post(
   }
 );
 
+myPlanRouter.get('/report', async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await plansService.weeklyReport(req.userId, dateParam(req.query.date)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 myPlanRouter.get('/coaches', async (req, res, next) => {
   try {
     res.json({ success: true, data: await coachService.listMyCoaches(req.userId) });

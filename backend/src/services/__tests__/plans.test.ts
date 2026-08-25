@@ -7,6 +7,8 @@ import {
   dietAdherence,
   LoggedFood,
   PlannedFood,
+  PlannedExercise,
+  trainingAdherence,
 } from '../plans.calc';
 
 function planned(id: string, foodId: string | null, meal: string, qty: number | null): PlannedFood {
@@ -205,5 +207,54 @@ describe('averageAdherence', () => {
 
   it('is null when no day had a plan', () => {
     expect(averageAdherence([null, null])).toBeNull();
+  });
+});
+
+
+function ex(id: string, minutes: number | null = null): PlannedExercise {
+  return { id, name: id, sets: 3, reps: 10, duration_minutes: minutes };
+}
+
+describe('trainingAdherence', () => {
+  it('is zero when a training day was scheduled and nothing was logged', () => {
+    const r = trainingAdherence([ex('a'), ex('b')], 0);
+    expect(r.percent).toBe(0);
+    expect(r.trained).toBe(false);
+  });
+
+  it('is full when they trained on a day with no prescribed duration', () => {
+    // The app cannot see reps, so training at all on a scheduled day is all
+    // it can honestly claim to know.
+    expect(trainingAdherence([ex('a')], 45).percent).toBe(100);
+  });
+
+  it('scores time trained against time prescribed', () => {
+    const r = trainingAdherence([ex('a', 30), ex('b', 30)], 30);
+    expect(r.plannedMinutes).toBe(60);
+    expect(r.percent).toBe(50);
+  });
+
+  it('does not credit above 100 for training longer than asked', () => {
+    expect(trainingAdherence([ex('a', 30)], 120).percent).toBe(100);
+  });
+
+  it('prefers hand-ticked exercises over the time estimate', () => {
+    // Two of three ticked is 67, even though the logged minutes would say 100.
+    const r = trainingAdherence([ex('a', 10), ex('b', 10), ex('c', 10)], 60, new Set(['a', 'b']));
+    expect(r.percent).toBe(67);
+    expect(r.checkedIds).toEqual(['a', 'b']);
+  });
+
+  it('returns null rather than 0% on a rest day', () => {
+    const r = trainingAdherence([], 0);
+    expect(r.percent).toBeNull();
+    expect(r.trained).toBe(false);
+  });
+
+  it('still reports a workout logged on an unscheduled day', () => {
+    const r = trainingAdherence([], 40);
+    expect(r.percent).toBeNull();
+    expect(r.trained).toBe(true);
+    expect(r.workoutMinutes).toBe(40);
   });
 });

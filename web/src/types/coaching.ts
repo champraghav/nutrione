@@ -80,6 +80,15 @@ export interface Assignment {
   cycle_days: number;
 }
 
+export interface TrainingAdherence {
+  planned: Array<{ id: string; name: string; sets: number | null; reps: number | null; duration_minutes: number | null }>;
+  trained: boolean;
+  workoutMinutes: number;
+  plannedMinutes: number | null;
+  percent: number | null;
+  checkedIds: string[];
+}
+
 export interface ClientDetail {
   client: {
     id: string;
@@ -92,7 +101,7 @@ export interface ClientDetail {
   date: string;
   assignments: Assignment[];
   dayPlans: DayPlan[];
-  adherence: { date: string; planName: string | null; adherence: Adherence | null };
+  adherence: { date: string; planName: string | null; adherence: Adherence | null; training: TrainingAdherence | null };
   trend: { days: Array<{ date: string; percent: number | null }>; average: number | null };
   habits: { due: number; done: number; percent: number | null; best_streak: number };
   weights: Array<{ date: string; value: string }>;

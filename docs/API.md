@@ -60,8 +60,44 @@ curl -X POST $BASE/auth/logout -H "Content-Type: application/json" \
   unaffected.
 - `POST /nutrition/meals/bulk` — body: `{ date, mealType?, items: [{ foodId, quantity, unit }] }`.
   Logs a whole plate at once (used after confirming a photo scan).
+### Fast logging
+
+- `GET /nutrition/recent-foods` — distinct foods logged most recently, each
+  remembering the quantity, unit and meal you last used
+- `GET /nutrition/frequent-foods` — foods logged on the most separate *days*,
+  so one heavy snacking day cannot dominate the list forever
+- `GET /nutrition/logged-dates` — days with meals, for the "copy from" picker
+- `POST /nutrition/quick-add` — body: `{ date, mealType, label?, calories, proteinG?, carbsG?, fatG? }`.
+  Records calories without naming a food. Stored with no `food_id`, so it
+  never adds junk rows to the shared food database.
+- `POST /nutrition/copy-day` — body: `{ fromDate, toDate, mealTypes? }`.
+  Items already on the target date are skipped, so repeating it is harmless.
+
+### My foods and recipes
+
+Both are ordinary rows in `foods` owned by their creator, which makes them
+searchable, loggable, plan-able and photo-matchable with no special cases —
+and private, via the same ownership scoping as imported foods.
+
+- `GET /nutrition/my-foods`
+- `POST /nutrition/my-foods` — a custom food with its own per-serving nutrition
+- `DELETE /nutrition/my-foods/:id` — refused with `FOOD_IN_USE` if it already
+  appears in logged meals, rather than rewriting your history
+- `POST /nutrition/recipes` — body: `{ name, servings }`
+- `GET /nutrition/recipes/:id` — the recipe plus its ingredients
+- `POST /nutrition/recipes/:id/ingredients` — body: `{ foodId, quantity, unit }`
+- `DELETE /nutrition/recipes/:id/ingredients/:ingredientId`
+- `PUT /nutrition/recipes/:id/servings` — body: `{ servings }`
+
+Per-serving nutrition is recomputed from the ingredients on every change, so
+the stored numbers cannot drift from what the recipe contains.
+
+### Daily totals
+
 - `GET /nutrition/logs?date=2026-08-13` — meal items logged for a date
-- `GET /nutrition/summary?date=2026-08-13` — daily totals
+- `GET /nutrition/summary?date=2026-08-13` — daily totals, targets, remaining,
+  and a `budget` of `target - eaten + exercise`. Exercise credits the budget
+  back, capped at the target so a long ride cannot licence an unbounded binge.
 - `GET /nutrition/history?days=30`
 - `POST /nutrition/meals` — body: `{ foodId, quantity, unit, date, mealType }`
 - `DELETE /nutrition/meals/:id`
@@ -115,6 +151,27 @@ time from their side, and the coach cannot undo that.
 - `POST /my-plan/accept-invite` — body: `{ code }`
 - `DELETE /my-plan/coaches/:id` — stop sharing, immediately
 
+### Messages
+
+Either side of a live coaching link may read and post; access is resolved from
+the link, so ending the relationship closes the conversation at the same
+moment it closes the data.
+
+- `GET /coach/unread` — unread counts per conversation, for badges
+- `GET /coach/clients/:id/messages` — the thread; reading it marks the other
+  side's messages read, so an unread badge cannot get stuck
+- `POST /coach/clients/:id/messages` — body: `{ body }`
+
+Clients call these with their own token and get their own conversation.
+
+### Weekly report
+
+- `GET /coach/clients/:id/report?date=` (coach) and `GET /my-plan/report?date=`
+  (client) — the seven days ending on `date`: diet and training adherence,
+  days logged, average calories/protein/steps, workouts and minutes, habits,
+  and weight change. Averages skip days with no data rather than counting them
+  as zero.
+
 ### How adherence is scored
 
 Logged meals are matched to plan lines by food, preferring the same meal slot
@@ -128,6 +185,14 @@ can satisfy at most one plan line.
 Food eaten off-plan is reported separately as extras and does not reduce the
 score; the coach sees both numbers. Days the plan does not cover are excluded
 from averages rather than counted as zero.
+
+**Training** is scored more loosely on purpose. A workout is one session with a
+duration, not a list of matched items, so the honest question is "did they
+train on the days they were meant to?" rather than "did they hit every
+prescribed rep?", which the app cannot observe. Hand-ticked exercises are used
+when present; otherwise it compares minutes trained against minutes prescribed,
+capped at 100; a plan with no durations scores full marks for training at all
+on a scheduled day.
 
 ## Habits
 
@@ -149,6 +214,15 @@ from averages rather than counted as zero.
 Streaks count only the days a habit is *scheduled*, so skipping a Tuesday
 never breaks a Mon/Wed/Fri habit, and an unfinished today does not break a
 streak — the day is not over yet.
+
+## Steps
+
+- `GET /steps?date=` — `{ steps, target, calories, percent }`. The target comes
+  from an active `steps` goal if one is set, otherwise 10,000.
+- `POST /steps` — body: `{ date, steps }`. **Replaces** the day's count rather
+  than adding to it: a phone or band already knows the running total, so
+  incrementing would double-count on every sync.
+- `GET /steps/history?days=14`
 
 ## Fitness
 

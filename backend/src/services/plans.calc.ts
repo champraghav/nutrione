@@ -10,6 +10,14 @@
  * the app.
  */
 
+/** Shifts a 'YYYY-MM-DD' by whole days. */
+export function shiftDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const out = new Date(Date.UTC(y, m - 1, d));
+  out.setUTCDate(out.getUTCDate() + days);
+  return out.toISOString().slice(0, 10);
+}
+
 export function daysBetween(from: string, to: string): number {
   const parse = (d: string) => {
     const [y, m, day] = d.split('-').map(Number);
@@ -196,4 +204,92 @@ export function averageAdherence(daily: Array<number | null>): number | null {
   const scored = daily.filter((d): d is number => d !== null);
   if (scored.length === 0) return null;
   return Math.round(scored.reduce((a, b) => a + b, 0) / scored.length);
+}
+
+
+// ---------------------------------------------------------------------------
+// Training adherence
+//
+// Scored more loosely than diet on purpose. A workout is one session with a
+// duration and a type, not a list of matched items, so the honest question is
+// "did they train on the days they were meant to?" rather than "did they hit
+// every prescribed rep?", which the app cannot observe.
+// ---------------------------------------------------------------------------
+
+export interface PlannedExercise {
+  id: string;
+  name: string;
+  sets: number | null;
+  reps: number | null;
+  duration_minutes: number | null;
+}
+
+export interface TrainingAdherence {
+  /** Exercises the plan asked for on this day. */
+  planned: PlannedExercise[];
+  /** Whether any workout at all was logged. */
+  trained: boolean;
+  workoutMinutes: number;
+  /** Minutes the plan implies, when it says so. Null when it does not. */
+  plannedMinutes: number | null;
+  /** 0-100, or null when nothing was scheduled. */
+  percent: number | null;
+  /** Plan lines the client ticked off by hand. */
+  checkedIds: string[];
+}
+
+export function trainingAdherence(
+  planned: PlannedExercise[],
+  workoutMinutes: number,
+  checkedItemIds: ReadonlySet<string> = new Set()
+): TrainingAdherence {
+  const checkedIds = planned.filter((p) => checkedItemIds.has(p.id)).map((p) => p.id);
+
+  if (planned.length === 0) {
+    return {
+      planned,
+      trained: workoutMinutes > 0,
+      workoutMinutes,
+      plannedMinutes: null,
+      percent: null,
+      checkedIds,
+    };
+  }
+
+  const plannedMinutesTotal = planned.reduce((sum, p) => sum + (p.duration_minutes ?? 0), 0);
+  const plannedMinutes = plannedMinutesTotal > 0 ? plannedMinutesTotal : null;
+
+  // Ticking individual exercises is the precise signal, so prefer it whenever
+  // the client used it.
+  if (checkedIds.length > 0) {
+    return {
+      planned,
+      trained: true,
+      workoutMinutes,
+      plannedMinutes,
+      percent: Math.round((checkedIds.length / planned.length) * 100),
+      checkedIds,
+    };
+  }
+
+  if (workoutMinutes <= 0) {
+    return { planned, trained: false, workoutMinutes, plannedMinutes, percent: 0, checkedIds };
+  }
+
+  // Otherwise fall back to time trained against time prescribed, capped at
+  // 100: training longer than asked is not more than full compliance.
+  if (plannedMinutes) {
+    return {
+      planned,
+      trained: true,
+      workoutMinutes,
+      plannedMinutes,
+      percent: Math.min(100, Math.round((workoutMinutes / plannedMinutes) * 100)),
+      checkedIds,
+    };
+  }
+
+  // A plan with no durations: they trained on a day they were meant to, which
+  // is all this app can honestly claim to know.
+  return { planned, trained: true, workoutMinutes, plannedMinutes, percent: 100, checkedIds };
 }

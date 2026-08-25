@@ -4,6 +4,7 @@ import Joi from 'joi';
 import * as coachService from '../services/coach.service';
 import * as plansService from '../services/plans.service';
 import * as habitsService from '../services/habits.service';
+import * as messagesService from '../services/messages.service';
 import { query } from '../config/database';
 import { requireAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -253,3 +254,49 @@ coachRouter.delete('/assignments/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+
+// --- Messages ---------------------------------------------------------------
+//
+// Mounted on the coach router but usable by either side: access is resolved
+// from the coaching link, so a client hitting these with their own token gets
+// their own conversation and nothing else.
+
+coachRouter.get('/unread', async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await messagesService.unreadCounts(req.userId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+coachRouter.get('/clients/:id/report', async (req, res, next) => {
+  try {
+    const link = await coachService.requireClientAccess(req.userId, req.params.id);
+    const data = await plansService.weeklyReport(link.client_user_id as string, dateParam(req.query.date));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+coachRouter.get('/clients/:id/messages', async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await messagesService.listMessages(req.userId, req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+coachRouter.post(
+  '/clients/:id/messages',
+  validate(Joi.object({ body: Joi.string().trim().min(1).max(4000).required() })),
+  async (req, res, next) => {
+    try {
+      const data = await messagesService.sendMessage(req.userId, req.params.id, req.body.body);
+      res.status(201).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+);

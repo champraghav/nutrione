@@ -9,6 +9,10 @@ import {
   DietAdherence,
   LoggedFood,
   PlannedFood,
+  PlannedExercise,
+  trainingAdherence,
+  TrainingAdherence,
+  shiftDays,
 } from './plans.calc';
 
 export interface Plan {
@@ -410,23 +414,132 @@ export interface DayAdherence {
   date: string;
   planName: string | null;
   adherence: DietAdherence | null;
+  /** Null when no training plan covers the date. */
+  training: TrainingAdherence | null;
 }
 
 /** Adherence for one client on one date. */
 export async function adherenceForDate(clientUserId: string, date: string): Promise<DayAdherence> {
-  const plans = (await plansForUserOnDate(clientUserId, date)).filter((p) => p.kind === 'diet');
-  if (plans.length === 0) return { date, planName: null, adherence: null };
+  const all = await plansForUserOnDate(clientUserId, date);
+  const dietPlans = all.filter((p) => p.kind === 'diet');
+  const trainingPlans = all.filter((p) => p.kind === 'training');
 
-  const planned = plans.flatMap((p) => toPlannedFoods(p.items));
-  const [logged, checked] = await Promise.all([
-    loggedFoodsFor(clientUserId, date),
-    checkedItemIds(clientUserId, date),
-  ]);
+  if (dietPlans.length === 0 && trainingPlans.length === 0) {
+    return { date, planName: null, adherence: null, training: null };
+  }
+
+  const checked = await checkedItemIds(clientUserId, date);
+
+  let diet: DietAdherence | null = null;
+  if (dietPlans.length > 0) {
+    const logged = await loggedFoodsFor(clientUserId, date);
+    diet = dietAdherence(dietPlans.flatMap((p) => toPlannedFoods(p.items)), logged, checked);
+  }
+
+  let training: TrainingAdherence | null = null;
+  if (trainingPlans.length > 0) {
+    const minutes = await queryOne<{ total: string }>(
+      `SELECT COALESCE(SUM(duration_minutes), 0)::text AS total
+       FROM workout_sessions WHERE user_id = $1 AND workout_date = $2`,
+      [clientUserId, date]
+    );
+    const planned: PlannedExercise[] = trainingPlans.flatMap((p) =>
+      p.items.map((i) => ({
+        id: i.id,
+        name: i.exercise_name ?? i.custom_name ?? 'Exercise',
+        sets: i.sets,
+        reps: i.reps,
+        duration_minutes: i.duration_minutes,
+      }))
+    );
+    training = trainingAdherence(planned, Number(minutes?.total ?? 0), checked);
+  }
 
   return {
     date,
-    planName: plans.map((p) => p.planName).join(', '),
-    adherence: dietAdherence(planned, logged, checked),
+    planName: all.map((p) => p.planName).join(', '),
+    adherence: diet,
+    training,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Weekly report
+// ---------------------------------------------------------------------------
+
+export interface WeeklyReport {
+  from: string;
+  to: string;
+  dietAdherence: number | null;
+  trainingAdherence: number | null;
+  daysLogged: number;
+  daysInWeek: number;
+  avgCalories: number | null;
+  avgProtein: number | null;
+  workouts: number;
+  workoutMinutes: number;
+  avgSteps: number | null;
+  habitsPercent: number | null;
+  weightChangeKg: number | null;
+  bestStreak: number;
+}
+
+/**
+ * The week in one screen, which is the unit people actually review progress
+ * in. Averages skip days with no data rather than counting them as zero — a
+ * week where you logged four days at 2000 kcal averaged 2000, not 1140.
+ */
+export async function weeklyReport(clientUserId: string, endDate: string): Promise<WeeklyReport> {
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i -= 1) days.push(shiftDays(endDate, -i));
+  const from = days[0];
+
+  const [adherences, nutrition, workouts, steps, weights, habits] = await Promise.all([
+    Promise.all(days.map((d) => adherenceForDate(clientUserId, d))),
+    query<{ total_calories: string; total_protein_g: string }>(
+      `SELECT total_calories, total_protein_g FROM nutrition_logs
+       WHERE user_id = $1 AND log_date BETWEEN $2 AND $3 AND total_calories > 0`,
+      [clientUserId, from, endDate]
+    ),
+    queryOne<{ sessions: string; minutes: string }>(
+      `SELECT count(*)::text AS sessions, COALESCE(SUM(duration_minutes), 0)::text AS minutes
+       FROM workout_sessions WHERE user_id = $1 AND workout_date BETWEEN $2 AND $3`,
+      [clientUserId, from, endDate]
+    ),
+    query<{ steps: number }>(
+      'SELECT steps FROM step_logs WHERE user_id = $1 AND log_date BETWEEN $2 AND $3',
+      [clientUserId, from, endDate]
+    ),
+    query<{ value: string }>(
+      `SELECT value FROM health_metrics
+       WHERE user_id = $1 AND metric_type = 'weight' AND recorded_at::date BETWEEN $2 AND $3
+       ORDER BY recorded_at ASC`,
+      [clientUserId, from, endDate]
+    ),
+    import('./habits.service').then((m) => m.getHabitsSummary(clientUserId, endDate)),
+  ]);
+
+  const mean = (values: number[]) =>
+    values.length === 0 ? null : Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+
+  return {
+    from,
+    to: endDate,
+    dietAdherence: averageAdherence(adherences.map((a) => a.adherence?.percent ?? null)),
+    trainingAdherence: averageAdherence(adherences.map((a) => a.training?.percent ?? null)),
+    daysLogged: nutrition.length,
+    daysInWeek: 7,
+    avgCalories: mean(nutrition.map((r) => Number(r.total_calories))),
+    avgProtein: mean(nutrition.map((r) => Number(r.total_protein_g))),
+    workouts: Number(workouts?.sessions ?? 0),
+    workoutMinutes: Number(workouts?.minutes ?? 0),
+    avgSteps: mean(steps.map((r) => Number(r.steps))),
+    habitsPercent: habits.percent,
+    weightChangeKg:
+      weights.length >= 2
+        ? Math.round((Number(weights[weights.length - 1].value) - Number(weights[0].value)) * 10) / 10
+        : null,
+    bestStreak: habits.best_streak,
   };
 }
 

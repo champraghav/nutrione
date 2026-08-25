@@ -4,6 +4,8 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { DatePicker } from '@components/DatePicker';
 import { todayLocal } from '@utils/dates';
+import { MessageThread } from '@components/MessageThread';
+import { WeeklyReportCard } from '@components/WeeklyReportCard';
 import { Adherence, DayPlan, MEAL_TYPES, PlanItem } from '../types/coaching';
 
 interface MyPlanData {
@@ -116,6 +118,8 @@ export function MyPlanPage() {
         </div>
       )}
 
+      <WeeklyReportCard date={date} />
+
       {loading && <p className="text-gray-500">Loading…</p>}
 
       {!loading && dietPlans.length === 0 && trainingPlans.length === 0 && (
@@ -225,6 +229,14 @@ export function MyPlanPage() {
           </p>
         </div>
       )}
+
+      {coaches.map((c) => (
+        <MessageThread
+          key={c.coach_client_id}
+          coachClientId={c.coach_client_id}
+          title={`Messages with ${c.coach_name || c.coach_email}`}
+        />
+      ))}
 
       <div className="card space-y-3">
         <h2 className="font-semibold text-gray-900">Your coaches</h2>

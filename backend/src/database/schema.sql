@@ -529,3 +529,16 @@ CREATE TABLE IF NOT EXISTS step_logs (
   UNIQUE (user_id, log_date)
 );
 CREATE INDEX IF NOT EXISTS idx_step_logs_user_date ON step_logs(user_id, log_date DESC);
+
+-- Messages between a coach and one client. Scoped to the coach_clients link
+-- rather than to a pair of user ids, so ending the relationship ends access to
+-- the conversation with it — the same boundary that governs the health data.
+CREATE TABLE IF NOT EXISTS coach_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  coach_client_id UUID NOT NULL REFERENCES coach_clients(id) ON DELETE CASCADE,
+  sender_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_coach_messages_thread ON coach_messages(coach_client_id, created_at ASC);

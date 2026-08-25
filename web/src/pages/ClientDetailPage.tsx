@@ -7,6 +7,8 @@ import { Select } from '@components/Select';
 import { Badge } from '@components/Badge';
 import { DatePicker } from '@components/DatePicker';
 import { todayLocal } from '@utils/dates';
+import { MessageThread } from '@components/MessageThread';
+import { WeeklyReportCard } from '@components/WeeklyReportCard';
 import { ClientDetail, MEAL_TYPES, Plan } from '../types/coaching';
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -134,6 +136,37 @@ export function ClientDetailPage() {
           </p>
         </div>
       </div>
+
+      <WeeklyReportCard coachClientId={id} date={date} />
+
+      {data.dayPlans.some((p) => p.kind === 'training') && data.adherence.training && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-2">Training today</h2>
+          <p className="text-sm text-gray-700">
+            {data.adherence.training.percent === null
+              ? 'No training scheduled.'
+              : `${data.adherence.training.percent}% — ${data.adherence.training.workoutMinutes} min logged${
+                  data.adherence.training.plannedMinutes ? ` of ${data.adherence.training.plannedMinutes} planned` : ''
+                }`}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {data.adherence.training.planned.map((ex) => (
+              <li key={ex.id} className="text-sm text-gray-700">
+                {ex.name}
+                <span className="text-gray-400">
+                  {ex.sets && ex.reps ? ` · ${ex.sets} × ${ex.reps}` : ''}
+                  {ex.duration_minutes ? ` · ${ex.duration_minutes} min` : ''}
+                </span>
+                {data.adherence.training?.checkedIds.includes(ex.id) && (
+                  <span className="text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full ml-2">done</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <MessageThread coachClientId={id} title={`Messages with ${data.client.name}`} />
 
       {adherence && adherence.lines.length > 0 && (
         <div className="card">
