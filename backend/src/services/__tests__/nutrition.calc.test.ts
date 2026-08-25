@@ -362,6 +362,33 @@ describe('calculatePlan', () => {
   });
 });
 
+describe('computeSleepDuration', () => {
+  const at = (iso: string) => new Date(iso);
+
+  it('handles a night that crosses midnight', () => {
+    expect(computeSleepDuration(at('2026-08-17T23:10:00Z'), at('2026-08-18T07:00:00Z'))).toBe(470);
+  });
+
+  it('handles a nap that does not cross midnight', () => {
+    expect(computeSleepDuration(at('2026-08-16T01:00:00Z'), at('2026-08-16T09:00:00Z'))).toBe(480);
+  });
+
+  it('refuses two identical times rather than calling it a 24-hour sleep', () => {
+    expect(computeSleepDuration(at('2026-08-15T23:00:00Z'), at('2026-08-15T23:00:00Z'))).toBeNull();
+  });
+
+  it('refuses times entered the wrong way round', () => {
+    // Rolling the negative span forward by a day used to record this as 23.5
+    // hours in bed, which then dragged the sleep score and trend with it.
+    expect(computeSleepDuration(at('2026-08-14T23:00:00Z'), at('2026-08-14T22:30:00Z'))).toBeNull();
+  });
+
+  it('still allows a long but believable night', () => {
+    // 15 hours is unusual but happens when someone is ill; 16 is the cutoff.
+    expect(computeSleepDuration(at('2026-08-14T20:00:00Z'), at('2026-08-15T11:00:00Z'))).toBe(900);
+  });
+});
+
 describe('projectGoalDate', () => {
   const from = new Date('2026-01-01T00:00:00Z');
 

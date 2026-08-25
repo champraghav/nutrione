@@ -33,6 +33,12 @@ export async function logSleep(userId: string, input: LogSleepInput): Promise<Sl
   const bedtime = toTimestamp(input.date, input.bedtime);
   const wakeTime = toTimestamp(input.date, input.wakeTime);
   const durationMinutes = computeDuration(bedtime, wakeTime);
+  if (durationMinutes === null) {
+    throw AppError.badRequest(
+      'That works out at more than 16 hours in bed. Check the two times — they may be the wrong way round.',
+      'IMPLAUSIBLE_SLEEP'
+    );
+  }
 
   const session = await queryOne<SleepSession>(
     `INSERT INTO sleep_sessions (user_id, sleep_date, bedtime, wake_time, duration_minutes, quality, notes)
@@ -78,6 +84,12 @@ export async function updateSleep(userId: string, id: string, input: Partial<Log
   const bedtime = input.bedtime ? toTimestamp(existing.sleep_date, input.bedtime) : new Date(existing.bedtime);
   const wakeTime = input.wakeTime ? toTimestamp(existing.sleep_date, input.wakeTime) : new Date(existing.wake_time);
   const durationMinutes = computeDuration(bedtime, wakeTime);
+  if (durationMinutes === null) {
+    throw AppError.badRequest(
+      'That works out at more than 16 hours in bed. Check the two times — they may be the wrong way round.',
+      'IMPLAUSIBLE_SLEEP'
+    );
+  }
 
   const updated = await queryOne<SleepSession>(
     `UPDATE sleep_sessions SET bedtime = $2, wake_time = $3, duration_minutes = $4,

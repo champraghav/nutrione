@@ -1,6 +1,15 @@
-import { query, queryOne } from '../config/database';
+import { query, queryOne, transaction } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { parseCsv, findColumn, parseNumber, parseDate } from './csv';
+
+/**
+ * Ceilings on what an imported row may claim. The nutrient and weight columns
+ * are NUMERIC(8,2)/(10,2), so a figure past these cannot be stored — and a row
+ * that fails at write time takes the rest of the file with it. Rejecting them
+ * during parsing turns a failed import into a skipped line with a reason.
+ */
+const MAX_IMPORTED_CALORIES = 100000;
+const MAX_IMPORTED_WEIGHT_KG = 700;
 
 export type ImportKind = 'nutrition' | 'weight' | 'exercise' | 'unknown';
 
@@ -151,6 +160,13 @@ export function buildPreview(csvText: string, dayFirst = false): ImportPreview {
         skipped.push({ line, reason: `"${food}" has no calories` });
         continue;
       }
+      // Caught here rather than at write time: the nutrient columns are
+      // NUMERIC(8,2), and letting an impossible figure through meant the whole
+      // import died partway, having already written the rows before it.
+      if (calories > MAX_IMPORTED_CALORIES) {
+        skipped.push({ line, reason: `"${food}" has an impossible calorie figure (${calories})` });
+        continue;
+      }
       parsed.push({
         date,
         meal: normaliseMeal(c.meal !== -1 ? (row[c.meal] ?? '') : ''),
@@ -180,8 +196,8 @@ export function buildPreview(csvText: string, dayFirst = false): ImportPreview {
     } else {
       const c = cols;
       const weightKg = parseNumber(row[c.weight]);
-      if (weightKg <= 0) {
-        skipped.push({ line, reason: 'No usable weight value' });
+      if (weightKg <= 0 || weightKg > MAX_IMPORTED_WEIGHT_KG) {
+        skipped.push({ line, reason: `No usable weight value (${row[c.weight] ?? ''})` });
         continue;
       }
       parsed.push({ date, weightKg });
@@ -214,7 +230,7 @@ export function buildPreview(csvText: string, dayFirst = false): ImportPreview {
  * their own naming and any errors in it, so they are owned by the person who
  * imported them and are invisible to everyone else.
  */
-async function findOrCreateImportedFood(userId: string, row: NutritionRow): Promise<string> {
+async function findOrCreateImportedFood(queryOne: Q1, userId: string, row: NutritionRow): Promise<string> {
   const existing = await queryOne<{ id: string }>(
     `SELECT id FROM foods
      WHERE name = $1 AND region = 'imported' AND owner_user_id = $6
@@ -255,7 +271,21 @@ export interface ImportResult {
  * safe: an identical entry on the same date is treated as a duplicate and
  * skipped, so overlapping exports don't double-count.
  */
-export async function commitImport(
+/**
+ * All-or-nothing. Each row was a separate statement on its own connection, so
+ * a single bad row left everything before it written and everything after it
+ * missing — and the user, seeing an error, had no way to tell which.
+ */
+export async function commitImport(userId: string, preview: ImportPreview): Promise<ImportResult> {
+  return transaction(({ query, queryOne }) => commitWithin(query, queryOne, userId, preview));
+}
+
+type Q = <R = any>(text: string, params?: any[]) => Promise<R[]>;
+type Q1 = <R = any>(text: string, params?: any[]) => Promise<R | null>;
+
+async function commitWithin(
+  query: Q,
+  queryOne: Q1,
   userId: string,
   preview: ImportPreview
 ): Promise<ImportResult> {
@@ -265,7 +295,7 @@ export async function commitImport(
 
   if (preview.kind === 'nutrition') {
     for (const row of preview.rows as NutritionRow[]) {
-      const foodId = await findOrCreateImportedFood(userId, row);
+      const foodId = await findOrCreateImportedFood(queryOne, userId, row);
 
       const dupe = await queryOne(
         `SELECT id FROM meal_items

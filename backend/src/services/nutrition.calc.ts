@@ -267,13 +267,28 @@ export function portionFromGrams(
 }
 
 /**
+ * The longest night this will accept as real. Anything above it is a typo —
+ * most often the two times entered the wrong way round — and recording it
+ * would drag the sleep score and the whole trend chart with it.
+ */
+export const MAX_SLEEP_MINUTES = 16 * 60;
+
+/**
  * Minutes between bedtime and wake time, accounting for the common case of
  * sleep crossing midnight (bed 23:00, wake 07:00 is 8 hours, not -16).
+ *
+ * Returns null for a span that cannot be a night's sleep. Rolling every
+ * non-positive difference forward by a day turned two identical times into a
+ * 24-hour sleep and a reversed pair into 23.5 hours, both of which were
+ * recorded without complaint.
  */
-export function computeSleepDuration(bedtime: Date, wakeTime: Date): number {
+export function computeSleepDuration(bedtime: Date, wakeTime: Date): number | null {
   let ms = wakeTime.getTime() - bedtime.getTime();
   if (ms <= 0) ms += 24 * 60 * 60 * 1000;
-  return Math.round(ms / 60000);
+
+  const minutes = Math.round(ms / 60000);
+  if (minutes <= 0 || minutes > MAX_SLEEP_MINUTES) return null;
+  return minutes;
 }
 
 /**
