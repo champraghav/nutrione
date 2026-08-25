@@ -391,3 +391,101 @@ CREATE TABLE IF NOT EXISTS habit_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_habit_entries_habit ON habit_entries(habit_id, log_date DESC);
 CREATE INDEX IF NOT EXISTS idx_habit_entries_user_date ON habit_entries(user_id, log_date DESC);
+
+-- ============================================================
+-- COACHING: practitioners, their clients, and the plans they write
+-- ============================================================
+
+-- A coach's roster. The row exists from the moment the coach adds someone,
+-- but client_user_id stays NULL — and no health data is readable — until that
+-- person accepts the invite from their own account. A coach can never see a
+-- client's data merely by typing their email address.
+CREATE TABLE IF NOT EXISTS coach_clients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  coach_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  client_name TEXT NOT NULL,
+  client_email TEXT,
+  invite_code TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'ended')),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_coach_clients_coach ON coach_clients(coach_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_coach_clients_client ON coach_clients(client_user_id, status);
+-- One live link per coach/client pair; ended ones may repeat.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_coach_clients_pair
+  ON coach_clients(coach_user_id, client_user_id)
+  WHERE client_user_id IS NOT NULL AND status <> 'ended';
+
+-- A plan is a repeating cycle of days: a 7-day week, or a 1-day "every day
+-- the same". Written once by a coach, then assigned to any number of clients.
+CREATE TABLE IF NOT EXISTS plans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  coach_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('diet', 'training')),
+  cycle_days INTEGER NOT NULL DEFAULT 7 CHECK (cycle_days BETWEEN 1 AND 28),
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_plans_coach ON plans(coach_user_id, kind, archived_at);
+
+CREATE TABLE IF NOT EXISTS plan_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  -- 1-based position in the cycle: day 1 of 7, day 2 of 7, ...
+  day_number INTEGER NOT NULL CHECK (day_number >= 1),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+
+  -- diet items
+  meal_type TEXT CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  food_id UUID REFERENCES foods(id) ON DELETE SET NULL,
+  -- Free text for anything not in the food database, so a coach is never
+  -- blocked from writing the plan they actually mean.
+  custom_name TEXT,
+  quantity NUMERIC(8,2),
+  unit TEXT,
+
+  -- training items
+  exercise_id UUID REFERENCES exercises(id) ON DELETE SET NULL,
+  sets INTEGER,
+  reps INTEGER,
+  duration_minutes INTEGER,
+
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_plan_items_plan ON plan_items(plan_id, day_number, sort_order);
+
+-- Assigning a plan to a client. start_date anchors the cycle, so day 1 of a
+-- 7-day plan always lands on the same weekday the coach intended.
+CREATE TABLE IF NOT EXISTS plan_assignments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  coach_client_id UUID NOT NULL REFERENCES coach_clients(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_plan_assignments_client ON plan_assignments(coach_client_id, active);
+CREATE INDEX IF NOT EXISTS idx_plan_assignments_plan ON plan_assignments(plan_id);
+
+-- A client ticking off a plan line by hand. Needed because a plan legitimately
+-- contains things the food database cannot match — "handful of roasted chana",
+-- "green tea", "10k steps" — and without this those lines could never be
+-- satisfied, quietly dragging every adherence score down forever.
+CREATE TABLE IF NOT EXISTS plan_item_checkins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_item_id UUID NOT NULL REFERENCES plan_items(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (plan_item_id, user_id, log_date)
+);
+CREATE INDEX IF NOT EXISTS idx_plan_checkins_user_date ON plan_item_checkins(user_id, log_date);

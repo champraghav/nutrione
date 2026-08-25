@@ -164,6 +164,35 @@ export const api = {
   checkHabit: (id: string, date: string, count: number) =>
     request(http.post(`/habits/${id}/check`, { date, count })),
 
+  // Coaching - coach side
+  getClients: (date: string) => request(http.get('/coach/clients', { params: { date } })),
+  addClient: (data: Record<string, unknown>) => request(http.post('/coach/clients', data)),
+  getClientDetail: (id: string, date: string) => request(http.get(`/coach/clients/${id}`, { params: { date } })),
+  updateClientNotes: (id: string, notes: string) => request(http.put(`/coach/clients/${id}/notes`, { notes })),
+  endClient: (id: string) => request(http.delete(`/coach/clients/${id}`)),
+
+  getPlans: (kind?: string) => request(http.get('/coach/plans', { params: { kind } })),
+  getPlan: (id: string) => request(http.get(`/coach/plans/${id}`)),
+  createPlan: (data: Record<string, unknown>) => request(http.post('/coach/plans', data)),
+  updatePlan: (id: string, data: Record<string, unknown>) => request(http.put(`/coach/plans/${id}`, data)),
+  archivePlan: (id: string) => request(http.delete(`/coach/plans/${id}`)),
+  addPlanItem: (planId: string, data: Record<string, unknown>) =>
+    request(http.post(`/coach/plans/${planId}/items`, data)),
+  deletePlanItem: (planId: string, itemId: string) =>
+    request(http.delete(`/coach/plans/${planId}/items/${itemId}`)),
+  copyPlanDay: (planId: string, fromDay: number, toDay: number) =>
+    request(http.post(`/coach/plans/${planId}/copy-day`, { fromDay, toDay })),
+  assignPlan: (data: Record<string, unknown>) => request(http.post('/coach/assignments', data)),
+  endAssignment: (id: string) => request(http.delete(`/coach/assignments/${id}`)),
+
+  // Coaching - client side
+  getMyPlan: (date: string) => request(http.get('/my-plan', { params: { date } })),
+  checkPlanItem: (itemId: string, date: string, done: boolean) =>
+    request(http.post(`/my-plan/items/${itemId}/check`, { date, done })),
+  getMyCoaches: () => request(http.get('/my-plan/coaches')),
+  acceptInvite: (code: string) => request(http.post('/my-plan/accept-invite', { code })),
+  leaveCoach: (id: string) => request(http.delete(`/my-plan/coaches/${id}`)),
+
   // Import from other apps
   previewImport: (csv: string, dayFirst: boolean) => request(http.post('/import/preview', { csv, dayFirst })),
   commitImport: (csv: string, dayFirst: boolean) => request(http.post('/import/commit', { csv, dayFirst })),

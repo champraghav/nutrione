@@ -9,6 +9,8 @@ import { aiRouter } from './ai.routes';
 import { hydrationRouter } from './hydration.routes';
 import { goalsRouter } from './goals.routes';
 import { habitsRouter } from './habits.routes';
+import { coachRouter } from './coach.routes';
+import { myPlanRouter } from './myplan.routes';
 import { importRouter } from './import.routes';
 
 export const apiRouter = Router();
@@ -21,6 +23,8 @@ apiRouter.use('/sleep', sleepRouter);
 apiRouter.use('/hydration', hydrationRouter);
 apiRouter.use('/goals', goalsRouter);
 apiRouter.use('/habits', habitsRouter);
+apiRouter.use('/coach', coachRouter);
+apiRouter.use('/my-plan', myPlanRouter);
 apiRouter.use('/import', importRouter);
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/ai', aiRouter);

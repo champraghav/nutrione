@@ -1,5 +1,6 @@
 import rateLimit, { Options } from 'express-rate-limit';
 import { Request, Response } from 'express';
+import { env } from '../config/env';
 
 /**
  * "Try again later" is not actionable. Reading the window off the request lets
@@ -33,12 +34,12 @@ const shared: Partial<Options> = {
 
 export const apiRateLimit = rateLimit({
   ...shared,
-  limit: 300,
+  limit: env.rateLimitApi,
   handler: limitMessage('Too many requests.'),
 });
 
 export const authRateLimit = rateLimit({
   ...shared,
-  limit: 20,
+  limit: env.rateLimitAuth,
   handler: limitMessage('Too many sign-in attempts.'),
 });

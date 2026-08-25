@@ -10,6 +10,8 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3000', 10),
@@ -33,4 +35,13 @@ export const env = {
   anthropicApiUrl: process.env.ANTHROPIC_API_URL ?? 'https://api.anthropic.com/v1/messages',
 
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+
+  /**
+   * Request budgets per 15-minute window. Production values are deliberately
+   * tight; development gets a generous ceiling because a browser-driven test
+   * pass legitimately makes hundreds of calls a minute and being locked out of
+   * your own dev server for 15 minutes is pure friction.
+   */
+  rateLimitApi: Number(process.env.RATE_LIMIT_API ?? (isProduction ? 300 : 10000)),
+  rateLimitAuth: Number(process.env.RATE_LIMIT_AUTH ?? (isProduction ? 20 : 500)),
 };

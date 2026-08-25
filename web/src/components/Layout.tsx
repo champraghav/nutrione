@@ -12,14 +12,22 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/nutrition', label: 'Nutrition' },
+  { to: '/my-plan', label: 'My Plan' },
   { to: '/habits', label: 'Habits' },
   { to: '/fitness', label: 'Fitness' },
   { to: '/sleep', label: 'Sleep' },
   { to: '/coach', label: 'AI Coach' },
 ];
 
-/** Reference and setup screens, behind a menu so the bar never overflows. */
+/**
+ * Coaching and reference screens, behind a menu so the bar never overflows.
+ * Everyone gets the coaching entries: becoming a coach is just adding your
+ * first client, so putting them behind a role flag would hide the feature
+ * from exactly the people looking for it.
+ */
 const SECONDARY_NAV: NavItem[] = [
+  { to: '/clients', label: 'Clients' },
+  { to: '/plans', label: 'Plans' },
   { to: '/library', label: 'Library' },
   { to: '/vitals', label: 'Vitals' },
   { to: '/timeline', label: 'Timeline' },

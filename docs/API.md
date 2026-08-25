@@ -66,6 +66,69 @@ curl -X POST $BASE/auth/logout -H "Content-Type: application/json" \
 - `POST /nutrition/meals` — body: `{ foodId, quantity, unit, date, mealType }`
 - `DELETE /nutrition/meals/:id`
 
+## Coaching
+
+A user becomes a coach simply by adding their first client — there is no
+separate account type.
+
+**Consent is the whole design.** A coach adding someone gets a `pending` row
+and an invite code, and nothing else. No health data is readable until that
+person enters the code from their own account. The client can revoke at any
+time from their side, and the coach cannot undo that.
+
+### Coach side
+
+- `GET /coach/clients?date=` — roster with today's calories, latest weight,
+  last-logged date and active plan count for each client
+- `POST /coach/clients` — body: `{ name, email?, notes? }`. Returns the row
+  including `invite_code` to send to the client.
+- `GET /coach/clients/:id?date=` — one client in full: plans in force, the
+  day's plan-vs-actual breakdown, 14-day adherence trend, habits summary,
+  weight history and 30 days of nutrition totals. Requires an accepted link.
+- `PUT /coach/clients/:id/notes` — private notes, never shown to the client
+- `DELETE /coach/clients/:id` — ends the relationship and its assignments
+
+- `GET /coach/plans?kind=diet|training`
+- `POST /coach/plans` — body: `{ name, description?, kind, cycleDays? }`.
+  A plan is a repeating cycle: 1 day (same every day), 7 days, up to 28.
+- `GET /coach/plans/:id` — the plan plus its items, with food nutrition joined
+- `PUT /coach/plans/:id`, `DELETE /coach/plans/:id` (archives)
+- `POST /coach/plans/:id/items` — a diet line (`mealType`, `foodId` or
+  `customName`, `quantity`, `unit`) or a training line (`exerciseId` or
+  `customName`, `sets`, `reps`, `durationMinutes`)
+- `DELETE /coach/plans/:id/items/:itemId`
+- `POST /coach/plans/:id/copy-day` — body: `{ fromDay, toDay }`. Replaces the
+  target day with a copy, because most days of a week are near-identical.
+
+- `POST /coach/assignments` — body: `{ planId, coachClientId, startDate, endDate? }`.
+  `startDate` anchors the cycle, so day 1 lands on the weekday you intended.
+- `DELETE /coach/assignments/:id`
+
+### Client side
+
+- `GET /my-plan?date=` — the plans in force for that date, which day of each
+  cycle it is, and the adherence breakdown
+- `POST /my-plan/items/:itemId/check` — body: `{ date, done }`. Ticks a plan
+  line off by hand. Required for free-text lines ("handful of chana"), which
+  have no food behind them to match against.
+- `GET /my-plan/coaches` — who can currently see your data
+- `POST /my-plan/accept-invite` — body: `{ code }`
+- `DELETE /my-plan/coaches/:id` — stop sharing, immediately
+
+### How adherence is scored
+
+Logged meals are matched to plan lines by food, preferring the same meal slot
+but still crediting the planned food eaten at another time. Each logged entry
+can satisfy at most one plan line.
+
+- **followed** — right food, portion within 25% of the plan
+- **partial** — right food, portion well outside that band (counts as half)
+- **missed** — planned but never logged or ticked
+
+Food eaten off-plan is reported separately as extras and does not reduce the
+score; the coach sees both numbers. Days the plan does not cover are excluded
+from averages rather than counted as zero.
+
 ## Habits
 
 - `GET /habits?date=2026-08-14` — every active habit with, for that date:

@@ -16,6 +16,11 @@ import { LibraryPage } from '@pages/LibraryPage';
 import { VitalsPage } from '@pages/VitalsPage';
 import { ImportPage } from '@pages/ImportPage';
 import { HabitsPage } from '@pages/HabitsPage';
+import { MyPlanPage } from '@pages/MyPlanPage';
+import { ClientsPage } from '@pages/ClientsPage';
+import { ClientDetailPage } from '@pages/ClientDetailPage';
+import { PlansPage } from '@pages/PlansPage';
+import { PlanBuilderPage } from '@pages/PlanBuilderPage';
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const user = useAppStore((state) => state.user);
@@ -46,7 +51,12 @@ export default function App() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/nutrition" element={<NutritionPage />} />
+          <Route path="/my-plan" element={<MyPlanPage />} />
           <Route path="/habits" element={<HabitsPage />} />
+          <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/clients/:id" element={<ClientDetailPage />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/plans/:id" element={<PlanBuilderPage />} />
           <Route path="/fitness" element={<FitnessPage />} />
           <Route path="/sleep" element={<SleepPage />} />
           <Route path="/coach" element={<ChatPage />} />
