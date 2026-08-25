@@ -6,6 +6,7 @@ import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { capitalize, formatDate } from '@utils/formatters';
 import { todayLocal, toLocalDateString } from '@utils/dates';
+import { StepsCard } from '@components/StepsCard';
 
 interface Exercise {
   id: string;
@@ -134,6 +135,8 @@ export function FitnessPage() {
         <h1 className="text-2xl font-bold text-gray-900">Fitness</h1>
         <p className="text-gray-500 text-sm">Log workouts and track progress.</p>
       </div>
+
+      <StepsCard date={todayLocal()} />
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Log a workout</h2>

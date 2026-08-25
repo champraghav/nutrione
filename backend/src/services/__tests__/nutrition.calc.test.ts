@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  calorieBudget,
+  stepsToCalories,
   calculateTargets,
   calculateAge,
   scaleNutrient,
@@ -219,5 +221,49 @@ describe('extractJsonObject', () => {
 
   it('throws a clear error when there is no JSON at all', () => {
     expect(() => extractJsonObject('I cannot see any food.')).toThrow(/No JSON object/);
+  });
+});
+
+
+describe('calorieBudget', () => {
+  it('credits exercise back to the budget', () => {
+    const b = calorieBudget(2000, 1800, 300);
+    expect(b.remaining).toBe(500);
+    expect(b.over).toBe(false);
+  });
+
+  it('reports going over the target', () => {
+    const b = calorieBudget(2000, 2400, 0);
+    expect(b.remaining).toBe(-400);
+    expect(b.over).toBe(true);
+  });
+
+  it('caps the exercise credit at the daily target', () => {
+    // A 5000 kcal "burn" cannot licence eating 7000.
+    const b = calorieBudget(2000, 0, 5000);
+    expect(b.burned).toBe(2000);
+    expect(b.remaining).toBe(4000);
+  });
+
+  it('ignores a negative burn', () => {
+    expect(calorieBudget(2000, 500, -300).burned).toBe(0);
+  });
+
+  it('is exactly the target when nothing is eaten or burned', () => {
+    expect(calorieBudget(1800, 0, 0).remaining).toBe(1800);
+  });
+});
+
+describe('stepsToCalories', () => {
+  it('scales with body weight', () => {
+    expect(stepsToCalories(10000, 60)).toBeLessThan(stepsToCalories(10000, 90));
+  });
+
+  it('falls back to an average weight when the profile is empty', () => {
+    expect(stepsToCalories(10000, null)).toBe(350);
+  });
+
+  it('is zero for no steps', () => {
+    expect(stepsToCalories(0, 70)).toBe(0);
   });
 });

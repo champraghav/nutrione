@@ -162,3 +162,39 @@ export function extractJsonObject(text: string): unknown {
   if (start === -1 || end === -1) throw new Error('No JSON object found in model response');
   return JSON.parse(candidate.slice(start, end + 1));
 }
+
+
+/**
+ * Calories still available to eat, the MyFitnessPal way:
+ *
+ *     remaining = target - eaten + burned
+ *
+ * Exercise credits the budget back. That is what people expect, and hiding it
+ * makes an active day look like a blown one. It is capped at the target so a
+ * three-hour ride cannot licence an unbounded binge.
+ */
+export function calorieBudget(
+  target: number,
+  eaten: number,
+  burned: number
+): { target: number; eaten: number; burned: number; remaining: number; over: boolean } {
+  const credited = Math.max(0, Math.min(burned, target));
+  const remaining = Math.round(target + credited - eaten);
+  return {
+    target: Math.round(target),
+    eaten: Math.round(eaten),
+    burned: Math.round(credited),
+    remaining,
+    over: remaining < 0,
+  };
+}
+
+/**
+ * Rough calories burned walking. Used only to show steps in the same units as
+ * everything else; the coefficient is a population average (about 0.04 kcal
+ * per step per kg) and is not a substitute for a measured burn.
+ */
+export function stepsToCalories(steps: number, weightKg: number | null): number {
+  const weight = weightKg && weightKg > 0 ? weightKg : 70;
+  return Math.round(steps * 0.0005 * weight);
+}

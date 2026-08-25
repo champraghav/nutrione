@@ -489,3 +489,43 @@ CREATE TABLE IF NOT EXISTS plan_item_checkins (
   UNIQUE (plan_item_id, user_id, log_date)
 );
 CREATE INDEX IF NOT EXISTS idx_plan_checkins_user_date ON plan_item_checkins(user_id, log_date);
+
+-- ============================================================
+-- FAST LOGGING, RECIPES, STEPS
+-- ============================================================
+
+-- Quick-add entries record calories without naming a food ("450 kcal, lunch
+-- out"). They need no food row, so food_id becomes optional and a label
+-- carries what the user typed. Creating throwaway foods instead would fill
+-- the database with junk that then shows up in everyone's search.
+ALTER TABLE meal_items ALTER COLUMN food_id DROP NOT NULL;
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS label TEXT;
+
+-- A recipe is an ordinary owned food row (region = 'recipe') whose nutrition
+-- is computed from its ingredients. Modelling it as a food means it is
+-- searchable and loggable everywhere without any special cases.
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  recipe_food_id UUID NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES foods(id) ON DELETE CASCADE,
+  quantity NUMERIC(8,2) NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'g',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients ON recipe_ingredients(recipe_food_id, sort_order);
+
+-- How many servings the whole recipe makes, so per-serving nutrition can be
+-- derived from the ingredient totals.
+ALTER TABLE foods ADD COLUMN IF NOT EXISTS recipe_servings NUMERIC(6,2);
+
+CREATE TABLE IF NOT EXISTS step_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  log_date DATE NOT NULL,
+  steps INTEGER NOT NULL CHECK (steps >= 0),
+  source TEXT NOT NULL DEFAULT 'manual',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, log_date)
+);
+CREATE INDEX IF NOT EXISTS idx_step_logs_user_date ON step_logs(user_id, log_date DESC);

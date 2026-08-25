@@ -1,7 +1,13 @@
 import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
-import { calculateTargets, calculateAge, sizeSuggestion, DailyTargets as PureTargets } from './nutrition.calc';
+import {
+  calculateTargets,
+  calculateAge,
+  sizeSuggestion,
+  calorieBudget,
+  DailyTargets as PureTargets,
+} from './nutrition.calc';
 
 export interface Food {
   id: string;
@@ -239,9 +245,9 @@ export async function removeMealItem(userId: string, itemId: string): Promise<vo
 
 export async function getLogsForDate(userId: string, logDate: string) {
   return query(
-    `SELECT mi.*, f.name AS food_name, f.name_hi AS food_name_hi
+    `SELECT mi.*, COALESCE(f.name, mi.label) AS food_name, f.name_hi AS food_name_hi
      FROM meal_items mi
-     JOIN foods f ON f.id = mi.food_id
+     LEFT JOIN foods f ON f.id = mi.food_id
      WHERE mi.user_id = $1 AND mi.log_date = $2
      ORDER BY mi.created_at ASC`,
     [userId, logDate]
@@ -312,6 +318,8 @@ export interface DailyNutrition {
   consumed: Record<keyof DailyTargets, number>;
   targets: DailyTargets;
   remaining: Record<keyof DailyTargets, number>;
+  /** target - eaten + exercise, the headline number people actually read. */
+  budget: { target: number; eaten: number; burned: number; remaining: number; over: boolean };
 }
 
 /**
@@ -321,7 +329,14 @@ export interface DailyNutrition {
  * room to eat").
  */
 export async function getDailyNutrition(userId: string, logDate: string): Promise<DailyNutrition> {
-  const [rawConsumed, targets] = await Promise.all([getSummary(userId, logDate), getDailyTargets(userId)]);
+  // Imported lazily to avoid a circular import: steps needs nutrition.calc,
+  // which this module also uses.
+  const { caloriesBurnedOn } = await import('./steps.service');
+  const [rawConsumed, targets, burned] = await Promise.all([
+    getSummary(userId, logDate),
+    getDailyTargets(userId),
+    caloriesBurnedOn(userId, logDate),
+  ]);
 
   const c = rawConsumed as Record<string, string | number>;
   const consumed: Record<keyof DailyTargets, number> = {
@@ -347,7 +362,13 @@ export async function getDailyNutrition(userId: string, logDate: string): Promis
     saturated_fat_g: round1(targets.saturated_fat_g - consumed.saturated_fat_g),
   };
 
-  return { date: logDate, consumed, targets, remaining };
+  return {
+    date: logDate,
+    consumed,
+    targets,
+    remaining,
+    budget: calorieBudget(targets.calories, consumed.calories, burned),
+  };
 }
 
 export interface NutrientGap {
@@ -444,4 +465,174 @@ export async function getNutrientGaps(userId: string, logDate: string): Promise<
   }
 
   return gaps;
+}
+
+
+// ---------------------------------------------------------------------------
+// Fast logging
+//
+// Most days you eat the same handful of things. Making those one tap is the
+// single biggest difference between a food diary someone keeps and one they
+// abandon in a week.
+// ---------------------------------------------------------------------------
+
+export interface QuickFood {
+  id: string;
+  name: string;
+  serving_size: number;
+  serving_unit: string;
+  calories: number;
+  protein_g: number;
+  /** How many separate days this food was logged on, for the frequent list. */
+  times_logged?: number;
+  /** The quantity used last time, so re-logging defaults to your usual portion. */
+  last_quantity: number;
+  last_unit: string;
+  last_meal_type: string | null;
+}
+
+/** Distinct foods logged most recently, newest first. */
+export async function getRecentFoods(userId: string, limit = 20): Promise<QuickFood[]> {
+  return query<QuickFood>(
+    `SELECT DISTINCT ON (f.id)
+            f.id, f.name, f.serving_size, f.serving_unit, f.calories, f.protein_g,
+            mi.quantity AS last_quantity, mi.unit AS last_unit, mi.meal_type AS last_meal_type
+     FROM meal_items mi
+     JOIN foods f ON f.id = mi.food_id
+     WHERE mi.user_id = $1
+     ORDER BY f.id, mi.created_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+}
+
+/**
+ * Foods logged on the most separate days. Counting days rather than rows stops
+ * one day of obsessive snack logging from dominating the list forever.
+ */
+export async function getFrequentFoods(userId: string, limit = 20): Promise<QuickFood[]> {
+  return query<QuickFood>(
+    `WITH counted AS (
+       SELECT food_id, COUNT(DISTINCT log_date)::int AS times_logged, MAX(created_at) AS last_at
+       FROM meal_items WHERE user_id = $1 AND food_id IS NOT NULL
+       GROUP BY food_id
+     ),
+     latest AS (
+       SELECT DISTINCT ON (food_id) food_id, quantity, unit, meal_type
+       FROM meal_items WHERE user_id = $1 AND food_id IS NOT NULL
+       ORDER BY food_id, created_at DESC
+     )
+     SELECT f.id, f.name, f.serving_size, f.serving_unit, f.calories, f.protein_g,
+            c.times_logged,
+            l.quantity AS last_quantity, l.unit AS last_unit, l.meal_type AS last_meal_type
+     FROM counted c
+     JOIN foods f ON f.id = c.food_id
+     JOIN latest l ON l.food_id = c.food_id
+     ORDER BY c.times_logged DESC, c.last_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+}
+
+/**
+ * Logs calories without naming a food — "ate out, about 600 kcal". Stored with
+ * no food_id so it never pollutes the food database, and macros are optional
+ * because the whole point is that you do not know them.
+ */
+export async function quickAdd(
+  userId: string,
+  input: { logDate: string; mealType: string; label: string; calories: number; proteinG?: number; carbsG?: number; fatG?: number }
+) {
+  const item = await queryOne(
+    `INSERT INTO meal_items (user_id, food_id, label, log_date, meal_type, quantity, unit,
+                             calories, protein_g, carbs_g, fat_g)
+     VALUES ($1, NULL, $2, $3, $4, 1, 'serving', $5, $6, $7, $8)
+     RETURNING *`,
+    [
+      userId,
+      input.label.trim() || 'Quick add',
+      input.logDate,
+      input.mealType,
+      input.calories,
+      input.proteinG ?? 0,
+      input.carbsG ?? 0,
+      input.fatG ?? 0,
+    ]
+  );
+
+  await recalcDailyTotals(userId, input.logDate);
+  return item;
+}
+
+export interface CopyDayResult {
+  copied: number;
+  skipped: number;
+}
+
+/**
+ * Copies a day's meals onto another day. "Same as yesterday" is how a large
+ * share of real logging happens, and retyping six items to say so is exactly
+ * the friction that kills the habit.
+ *
+ * Meals already present on the target date are skipped rather than duplicated,
+ * so pressing it twice is harmless.
+ */
+export async function copyMealsFromDay(
+  userId: string,
+  fromDate: string,
+  toDate: string,
+  mealTypes?: string[]
+): Promise<CopyDayResult> {
+  const filter = mealTypes && mealTypes.length > 0 ? mealTypes : null;
+
+  const source = await query<{ id: string; food_id: string | null; label: string | null; meal_type: string; quantity: string; unit: string }>(
+    `SELECT id, food_id, label, meal_type, quantity, unit
+     FROM meal_items
+     WHERE user_id = $1 AND log_date = $2
+       AND ($3::text[] IS NULL OR meal_type = ANY($3))
+     ORDER BY created_at ASC`,
+    [userId, fromDate, filter]
+  );
+
+  let copied = 0;
+  let skipped = 0;
+
+  for (const row of source) {
+    const dupe = await queryOne<{ id: string }>(
+      `SELECT id FROM meal_items
+       WHERE user_id = $1 AND log_date = $2 AND meal_type = $3 AND quantity = $4
+         AND food_id IS NOT DISTINCT FROM $5 AND label IS NOT DISTINCT FROM $6
+       LIMIT 1`,
+      [userId, toDate, row.meal_type, row.quantity, row.food_id, row.label]
+    );
+    if (dupe) {
+      skipped += 1;
+      continue;
+    }
+
+    // Re-inserting by copying the stored nutrition keeps the copy identical to
+    // the original even if the underlying food has since been edited.
+    await query(
+      `INSERT INTO meal_items (user_id, food_id, label, log_date, meal_type, quantity, unit,
+                               calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
+       SELECT user_id, food_id, label, $3, meal_type, quantity, unit,
+              calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g
+       FROM meal_items WHERE id = $1 AND user_id = $2`,
+      [row.id, userId, toDate]
+    );
+    copied += 1;
+  }
+
+  if (copied > 0) await recalcDailyTotals(userId, toDate);
+  return { copied, skipped };
+}
+
+/** Days that actually have meals logged, for the "copy from" picker. */
+export async function getLoggedDates(userId: string, limit = 14): Promise<string[]> {
+  const rows = await query<{ log_date: string }>(
+    `SELECT DISTINCT log_date::text AS log_date FROM meal_items
+     WHERE user_id = $1 ORDER BY log_date DESC LIMIT $2`,
+    [userId, limit]
+  );
+  return rows.map((r) => r.log_date);
 }

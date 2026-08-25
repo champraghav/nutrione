@@ -11,6 +11,7 @@ import { goalsRouter } from './goals.routes';
 import { habitsRouter } from './habits.routes';
 import { coachRouter } from './coach.routes';
 import { myPlanRouter } from './myplan.routes';
+import { stepsRouter } from './steps.routes';
 import { importRouter } from './import.routes';
 
 export const apiRouter = Router();
@@ -25,6 +26,7 @@ apiRouter.use('/goals', goalsRouter);
 apiRouter.use('/habits', habitsRouter);
 apiRouter.use('/coach', coachRouter);
 apiRouter.use('/my-plan', myPlanRouter);
+apiRouter.use('/steps', stepsRouter);
 apiRouter.use('/import', importRouter);
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/ai', aiRouter);

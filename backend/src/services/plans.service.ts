@@ -387,16 +387,19 @@ export async function setItemCheckin(
 }
 
 async function loggedFoodsFor(clientUserId: string, date: string): Promise<LoggedFood[]> {
+  // LEFT JOIN so quick-add entries are still seen. They match no plan line,
+  // which is right, but they must still show up as something eaten.
   const rows = await query<{
     id: string;
     meal_type: string | null;
-    food_id: string;
+    food_id: string | null;
     name: string;
     quantity: string;
     unit: string | null;
   }>(
-    `SELECT mi.id, mi.meal_type, mi.food_id, f.name, mi.quantity, mi.unit
-     FROM meal_items mi JOIN foods f ON f.id = mi.food_id
+    `SELECT mi.id, mi.meal_type, mi.food_id, COALESCE(f.name, mi.label, 'Quick add') AS name,
+            mi.quantity, mi.unit
+     FROM meal_items mi LEFT JOIN foods f ON f.id = mi.food_id
      WHERE mi.user_id = $1 AND mi.log_date = $2`,
     [clientUserId, date]
   );

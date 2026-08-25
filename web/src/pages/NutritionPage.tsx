@@ -7,6 +7,8 @@ import { Select } from '@components/Select';
 import { BarcodeScanner } from '@components/BarcodeScanner';
 import { PlateScanner } from '@components/PlateScanner';
 import { HydrationCard } from '@components/HydrationCard';
+import { CalorieBudget, Budget } from '@components/CalorieBudget';
+import { QuickLogPanel } from '@components/QuickLogPanel';
 import { NutrientGapsCard } from '@components/NutrientGapsCard';
 import { capitalize, formatDate } from '@utils/formatters';
 import { todayLocal, friendlyDateLabel } from '@utils/dates';
@@ -56,6 +58,7 @@ interface DailyNutrition {
   consumed: NutrientSet;
   targets: NutrientSet;
   remaining: NutrientSet;
+  budget: Budget;
 }
 
 interface HistoryDay {
@@ -216,6 +219,10 @@ export function NutritionPage() {
       <div className="card py-3">
         <DatePicker date={date} onChange={setDate} />
       </div>
+
+      {nutrition && <CalorieBudget budget={nutrition.budget} isToday={isToday} />}
+
+      <QuickLogPanel date={date} mealType={mealType} onLogged={refresh} refreshKey={refreshKey} />
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">{isToday ? "Today's targets" : `Targets · ${friendlyDateLabel(date)}`}</h2>

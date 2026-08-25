@@ -59,7 +59,8 @@ export interface PlannedFood {
 export interface LoggedFood {
   id: string;
   meal_type: string | null;
-  food_id: string;
+  /** Null for a quick-add entry, which names no food and so matches no plan line. */
+  food_id: string | null;
   name: string;
   quantity: number;
   unit: string | null;

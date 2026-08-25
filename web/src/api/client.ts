@@ -164,6 +164,32 @@ export const api = {
   checkHabit: (id: string, date: string, count: number) =>
     request(http.post(`/habits/${id}/check`, { date, count })),
 
+  // Fast logging
+  getRecentFoods: () => request(http.get('/nutrition/recent-foods')),
+  getFrequentFoods: () => request(http.get('/nutrition/frequent-foods')),
+  getLoggedDates: () => request(http.get('/nutrition/logged-dates')),
+  quickAdd: (data: Record<string, unknown>) => request(http.post('/nutrition/quick-add', data)),
+  copyDay: (fromDate: string, toDate: string, mealTypes?: string[]) =>
+    request(http.post('/nutrition/copy-day', { fromDate, toDate, mealTypes })),
+
+  // Custom foods and recipes
+  getMyFoods: () => request(http.get('/nutrition/my-foods')),
+  createCustomFood: (data: Record<string, unknown>) => request(http.post('/nutrition/my-foods', data)),
+  deleteMyFood: (id: string) => request(http.delete(`/nutrition/my-foods/${id}`)),
+  createRecipe: (name: string, servings: number) => request(http.post('/nutrition/recipes', { name, servings })),
+  getRecipe: (id: string) => request(http.get(`/nutrition/recipes/${id}`)),
+  addRecipeIngredient: (id: string, foodId: string, quantity: number, unit: string) =>
+    request(http.post(`/nutrition/recipes/${id}/ingredients`, { foodId, quantity, unit })),
+  removeRecipeIngredient: (id: string, ingredientId: string) =>
+    request(http.delete(`/nutrition/recipes/${id}/ingredients/${ingredientId}`)),
+  setRecipeServings: (id: string, servings: number) =>
+    request(http.put(`/nutrition/recipes/${id}/servings`, { servings })),
+
+  // Steps
+  getSteps: (date: string) => request(http.get('/steps', { params: { date } })),
+  setSteps: (date: string, steps: number) => request(http.post('/steps', { date, steps })),
+  getStepHistory: (days = 14) => request(http.get('/steps/history', { params: { days } })),
+
   // Coaching - coach side
   getClients: (date: string) => request(http.get('/coach/clients', { params: { date } })),
   addClient: (data: Record<string, unknown>) => request(http.post('/coach/clients', data)),

@@ -28,6 +28,7 @@ const PRIMARY_NAV: NavItem[] = [
 const SECONDARY_NAV: NavItem[] = [
   { to: '/clients', label: 'Clients' },
   { to: '/plans', label: 'Plans' },
+  { to: '/my-foods', label: 'My foods' },
   { to: '/library', label: 'Library' },
   { to: '/vitals', label: 'Vitals' },
   { to: '/timeline', label: 'Timeline' },
