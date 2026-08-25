@@ -7,6 +7,34 @@ All responses are JSON in the shape `{ "success": boolean, "data": ... }` or
 
 Authenticated routes require `Authorization: Bearer <accessToken>`.
 
+## Dates
+
+A day means a calendar day **in the user's own timezone**, never in UTC. Every
+endpoint that takes a `date` accepts `YYYY-MM-DD` and the web client always
+sends its own local date; where one is omitted the server falls back to the
+`timezone` on the profile, and only then to UTC. A malformed date is treated as
+absent rather than passed to Postgres.
+
+Anything being *logged* — meals, water, steps, sleep, workouts, habit ticks —
+is refused more than one day past the UTC date. Diary entries record what
+happened, and a date years out is junk that shows up on every history chart.
+The one-day allowance exists because UTC+14 is a real place, and someone there
+logging their genuine today is a calendar day ahead of the server.
+
+Errors worth handling specifically:
+
+| code | meaning |
+| --- | --- |
+| `VALIDATION_ERROR` | the request body failed its schema; the message names the field |
+| `VALUE_OUT_OF_RANGE` | a number too large for its column, or unparseable |
+| `RATE_LIMITED` | carries `retryAfterSeconds` so the wait can be stated |
+| `IMPLAUSIBLE_SLEEP` | the two times work out at more than 16 hours |
+| `FOOD_IN_USE` / `FOOD_IN_RECIPE` | the food is referenced by logged meals or a recipe |
+| `RECIPE_CYCLE` / `RECIPE_SELF_REFERENCE` | the ingredient would make a recipe contain itself |
+
+Optional string fields accept `""`. That is how a form says "leave this
+blank", and it is stored as NULL rather than as an empty string.
+
 ## Auth
 
 ### POST /auth/signup
@@ -88,10 +116,17 @@ and private, via the same ownership scoping as imported foods.
 - `GET /nutrition/my-foods`
 - `POST /nutrition/my-foods` — a custom food with its own per-serving nutrition
 - `DELETE /nutrition/my-foods/:id` — refused with `FOOD_IN_USE` if it already
-  appears in logged meals, rather than rewriting your history
+  appears in logged meals, rather than rewriting your history, and with
+  `FOOD_IN_RECIPE` if a recipe is built from it. The ingredient row would
+  cascade away while the recipe kept its per-serving numbers, leaving a recipe
+  that reports calories it no longer contains.
 - `POST /nutrition/recipes` — body: `{ name, servings }`
 - `GET /nutrition/recipes/:id` — the recipe plus its ingredients
-- `POST /nutrition/recipes/:id/ingredients` — body: `{ foodId, quantity, unit }`
+- `POST /nutrition/recipes/:id/ingredients` — body: `{ foodId, quantity, unit }`.
+  A recipe may contain another recipe — a curry that uses your own spice mix —
+  but not one that (directly or through any chain) contains it back: each
+  one's nutrition would then derive from the other's, and no order of
+  recalculation converges. Refused with `RECIPE_CYCLE`.
 - `DELETE /nutrition/recipes/:id/ingredients/:ingredientId`
 - `PUT /nutrition/recipes/:id/servings` — body: `{ servings }`
 
@@ -268,6 +303,12 @@ streak — the day is not over yet.
 
 ## Sleep
 
+Bedtime and wake time may cross midnight — 23:00 to 07:00 is eight hours, not
+minus sixteen. Spans that work out at more than 16 hours are refused with
+`IMPLAUSIBLE_SLEEP`: almost always the two times were entered the wrong way
+round, and recording a 24-hour night drags the sleep score, the trend and every
+average with it.
+
 - `GET /sleep?days=30`
 - `GET /sleep/:date`
 - `GET /sleep/analysis/:date`
@@ -319,9 +360,14 @@ These apps have no public consumer API, so migration is via their CSV export.
   file is a food diary, weight history or exercise log from its headers,
   maps the columns, and returns the parsed rows plus anything skipped and
   why. Writes nothing.
-- `POST /import/commit` — same body; writes the rows. Re-running the same
-  export is safe: identical entries on the same date are skipped rather
-  than duplicated.
+- `POST /import/commit` — same body; writes the rows in a single transaction,
+  so a file that fails partway leaves nothing behind rather than a half-applied
+  history nobody can audit. Re-running the same export is safe: identical
+  entries on the same date are skipped rather than duplicated.
+
+Rows carrying impossible figures are dropped during parsing and listed in the
+preview's `skipped` with a reason, alongside the ones missing a date or a
+name — so they are visible before anything is written.
 
 ## AI Coach
 

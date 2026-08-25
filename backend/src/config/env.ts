@@ -42,6 +42,19 @@ export const env = {
    * pass legitimately makes hundreds of calls a minute and being locked out of
    * your own dev server for 15 minutes is pure friction.
    */
+  /**
+   * How many reverse proxies sit in front of this app.
+   *
+   * Behind one (Render, Heroku, Fly, most load balancers) every request
+   * arrives from the proxy's address, so without this the rate limiter sees a
+   * single client and its per-IP budget becomes a global one — twenty sign-in
+   * attempts across the entire user base, then nobody can log in.
+   *
+   * Deliberately a hop count rather than `true`: trusting every proxy lets a
+   * client set its own X-Forwarded-For and walk straight past the limit.
+   */
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? (isProduction ? 1 : 0)),
+
   rateLimitApi: Number(process.env.RATE_LIMIT_API ?? (isProduction ? 300 : 10000)),
   rateLimitAuth: Number(process.env.RATE_LIMIT_AUTH ?? (isProduction ? 20 : 500)),
 };

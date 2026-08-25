@@ -11,6 +11,9 @@ import { apiRateLimit } from './middleware/rateLimit.middleware';
 export function createApp(): Express {
   const app = express();
 
+  // Must come before the rate limiter, which reads req.ip.
+  if (env.trustProxyHops > 0) app.set('trust proxy', env.trustProxyHops);
+
   app.use(helmet());
   app.use(cors({ origin: env.corsOrigin }));
   // Generous enough for a base64-encoded meal photo from a phone camera.

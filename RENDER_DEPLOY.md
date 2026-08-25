@@ -67,6 +67,7 @@ For production, Redis is used for session caching and rate limiting. Render's Re
    JWT_ACCESS_EXPIRES_IN=15m
    JWT_REFRESH_EXPIRES_IN=30d
    CORS_ORIGIN=https://<your-frontend-domain>.onrender.com
+   TRUST_PROXY_HOPS=1
    ANTHROPIC_API_KEY=<optional: your Anthropic API key from console.anthropic.com>
    VISION_MODEL=claude-sonnet-4-5-20250929
    OLLAMA_URL=
@@ -150,6 +151,19 @@ Check the build logs in the Render Dashboard under your service > **Logs**.
 ### CORS Errors
 
 Ensure `CORS_ORIGIN` in the backend matches your frontend domain exactly (including `https://`).
+
+### Everyone gets "Too many sign-in attempts"
+
+`TRUST_PROXY_HOPS` is unset or `0`. Render routes every request through its own
+proxy, so without this the app sees one client address for the whole world and
+the per-IP rate limit becomes a global one — a few failed sign-ins from any one
+person lock out every user for the rest of the window. Set it to `1` (it
+defaults to `1` when `NODE_ENV=production`, so this only bites if something has
+overridden it).
+
+Do not set it higher than the number of proxies actually in front of the app,
+and never to `true`: each extra hop trusted is one a client can forge in
+`X-Forwarded-For` to sidestep the limit.
 
 ### Redis Connection Errors
 
