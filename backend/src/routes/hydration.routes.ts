@@ -1,21 +1,21 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as hydrationService from '../services/hydration.service';
 import { requireAuth } from '../middleware/auth.middleware';
+import { dateParam } from './dateParam';
 import { validate } from '../middleware/validate.middleware';
 
 export const hydrationRouter = Router();
 
 hydrationRouter.use(requireAuth);
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+
 
 hydrationRouter.get('/', async (req, res, next) => {
   try {
-    const date = typeof req.query.date === 'string' ? req.query.date.slice(0, 10) : today();
+    const date = await dateParam(req.query.date, req.userId);
     const data = await hydrationService.getHydrationForDate(req.userId, date);
     res.json({ success: true, data });
   } catch (err) {
@@ -35,13 +35,13 @@ hydrationRouter.get('/history', async (req, res, next) => {
 
 const addWaterSchema = Joi.object({
   amountMl: Joi.number().integer().min(1).max(3000).required(),
-  date: Joi.string().isoDate(),
+  date: loggableDate(),
 });
 
 hydrationRouter.post('/', validate(addWaterSchema), async (req, res, next) => {
   try {
     const { amountMl, date } = req.body as { amountMl: number; date?: string };
-    const data = await hydrationService.addWater(req.userId, (date ?? today()).slice(0, 10), amountMl);
+    const data = await hydrationService.addWater(req.userId, await dateParam(date, req.userId), amountMl);
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);

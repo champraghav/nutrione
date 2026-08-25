@@ -1,6 +1,7 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as sleepService from '../services/sleep.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -48,7 +49,7 @@ sleepRouter.get('/:date', async (req, res, next) => {
 });
 
 const logSleepSchema = Joi.object({
-  date: Joi.string().isoDate().required(),
+  date: loggableDate().required(),
   bedtime: Joi.string().required(),
   wakeTime: Joi.string().required(),
   quality: Joi.number().integer().min(1).max(5),

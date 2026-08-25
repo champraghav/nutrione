@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@api/client';
+import { todayLocal } from '@utils/dates';
 
 export interface AppUser {
   id: string;
@@ -89,7 +90,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   fetchHealthScore: async () => {
     set({ healthScoreLoading: true });
-    const res = await api.getHealthScore();
+    const res = await api.getHealthScore(todayLocal());
     set({
       healthScore: res.success ? (res.data as HealthScore) : null,
       healthScoreLoading: false,

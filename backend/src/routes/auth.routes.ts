@@ -11,8 +11,11 @@ authRouter.use(authRateLimit);
 const signupSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(8).max(72).required(),
-  firstName: Joi.string().max(100),
-  lastName: Joi.string().max(100),
+  // Optional means optional: the signup form submits empty strings for the
+  // names when they are left blank, and rejecting those blocked the account
+  // entirely rather than just leaving the name unset.
+  firstName: Joi.string().max(100).allow(''),
+  lastName: Joi.string().max(100).allow(''),
 });
 
 authRouter.post('/signup', validate(signupSchema), async (req, res, next) => {

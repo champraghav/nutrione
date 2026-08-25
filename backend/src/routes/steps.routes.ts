@@ -1,23 +1,21 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as stepsService from '../services/steps.service';
 import { requireAuth } from '../middleware/auth.middleware';
+import { dateParam } from './dateParam';
 import { validate } from '../middleware/validate.middleware';
 
 export const stepsRouter = Router();
 
 stepsRouter.use(requireAuth);
 
-function dateParam(value: unknown): string {
-  return typeof value === 'string' && value.length >= 10
-    ? value.slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-}
+
 
 stepsRouter.get('/', async (req, res, next) => {
   try {
-    res.json({ success: true, data: await stepsService.getSteps(req.userId, dateParam(req.query.date)) });
+    res.json({ success: true, data: await stepsService.getSteps(req.userId, await dateParam(req.query.date, req.userId)) });
   } catch (err) {
     next(err);
   }
@@ -34,7 +32,7 @@ stepsRouter.get('/history', async (req, res, next) => {
 
 stepsRouter.post(
   '/',
-  validate(Joi.object({ date: Joi.string().min(10).required(), steps: Joi.number().integer().min(0).max(200000).required() })),
+  validate(Joi.object({ date: loggableDate().required(), steps: Joi.number().integer().min(0).max(200000).required() })),
   async (req, res, next) => {
     try {
       const { date, steps } = req.body as { date: string; steps: number };

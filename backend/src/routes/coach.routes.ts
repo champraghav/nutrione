@@ -7,6 +7,7 @@ import * as habitsService from '../services/habits.service';
 import * as messagesService from '../services/messages.service';
 import { query } from '../config/database';
 import { requireAuth } from '../middleware/auth.middleware';
+import { dateParam } from './dateParam';
 import { validate } from '../middleware/validate.middleware';
 import { shiftYmd } from '../services/habits.calc';
 
@@ -14,19 +15,13 @@ export const coachRouter = Router();
 
 coachRouter.use(requireAuth);
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
-function dateParam(value: unknown): string {
-  return typeof value === 'string' && value.length >= 10 ? value.slice(0, 10) : today();
-}
 
 // --- Roster -----------------------------------------------------------------
 
 coachRouter.get('/clients', async (req, res, next) => {
   try {
-    const data = await coachService.clientOverview(req.userId, dateParam(req.query.date));
+    const data = await coachService.clientOverview(req.userId, await dateParam(req.query.date, req.userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -73,7 +68,7 @@ coachRouter.delete('/clients/:id', async (req, res, next) => {
 coachRouter.get('/clients/:id', async (req, res, next) => {
   try {
     const link = await coachService.requireClientAccess(req.userId, req.params.id);
-    const date = dateParam(req.query.date);
+    const date = await dateParam(req.query.date, req.userId);
     const clientId = link.client_user_id as string;
 
     const last14 = Array.from({ length: 14 }, (_, i) => shiftYmd(date, -(13 - i)));
@@ -273,7 +268,7 @@ coachRouter.get('/unread', async (req, res, next) => {
 coachRouter.get('/clients/:id/report', async (req, res, next) => {
   try {
     const link = await coachService.requireClientAccess(req.userId, req.params.id);
-    const data = await plansService.weeklyReport(link.client_user_id as string, dateParam(req.query.date));
+    const data = await plansService.weeklyReport(link.client_user_id as string, await dateParam(req.query.date, req.userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);

@@ -11,7 +11,12 @@ healthRouter.use(requireAuth);
 
 healthRouter.get('/score', async (req, res, next) => {
   try {
-    const score = await healthScoreService.getTodayScore(req.userId);
+    // The client sends its own local date; only it knows what day it is where
+    // the user is standing.
+    const score = await healthScoreService.getTodayScore(
+      req.userId,
+      typeof req.query.date === 'string' ? req.query.date : undefined
+    );
     res.json({ success: true, data: score });
   } catch (err) {
     next(err);
@@ -42,7 +47,7 @@ healthRouter.get('/metrics', async (req, res, next) => {
 const logMetricSchema = Joi.object({
   type: Joi.string().required(),
   value: Joi.number().required(),
-  unit: Joi.string(),
+  unit: Joi.string().allow(''),
 });
 
 healthRouter.post('/metrics', validate(logMetricSchema), async (req, res, next) => {

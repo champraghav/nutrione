@@ -1,25 +1,21 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as habitsService from '../services/habits.service';
 import { requireAuth } from '../middleware/auth.middleware';
+import { dateParam } from './dateParam';
 import { validate } from '../middleware/validate.middleware';
 
 export const habitsRouter = Router();
 
 habitsRouter.use(requireAuth);
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
-function dateParam(value: unknown): string {
-  return typeof value === 'string' && value.length >= 10 ? value.slice(0, 10) : today();
-}
 
 habitsRouter.get('/', async (req, res, next) => {
   try {
-    const data = await habitsService.listHabits(req.userId, dateParam(req.query.date));
+    const data = await habitsService.listHabits(req.userId, await dateParam(req.query.date, req.userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -28,7 +24,7 @@ habitsRouter.get('/', async (req, res, next) => {
 
 habitsRouter.get('/summary', async (req, res, next) => {
   try {
-    const data = await habitsService.getHabitsSummary(req.userId, dateParam(req.query.date));
+    const data = await habitsService.getHabitsSummary(req.userId, await dateParam(req.query.date, req.userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -41,7 +37,7 @@ habitsRouter.get('/suggestions', (_req, res) => {
 
 const habitSchema = Joi.object({
   name: Joi.string().trim().min(1).max(80).required(),
-  icon: Joi.string().max(8),
+  icon: Joi.string().max(8).allow(''),
   cadence: Joi.string().valid('daily', 'weekly'),
   targetPerDay: Joi.number().integer().min(1).max(50),
   daysOfWeek: Joi.array().items(Joi.number().integer().min(0).max(6)).max(7).allow(null),
@@ -62,7 +58,7 @@ habitsRouter.post('/', validate(habitSchema), async (req, res, next) => {
 habitsRouter.put('/:id', validate(habitSchema), async (req, res, next) => {
   try {
     await habitsService.updateHabit(req.userId, req.params.id, req.body as habitsService.HabitInput);
-    const data = await habitsService.listHabits(req.userId, today());
+    const data = await habitsService.listHabits(req.userId, await dateParam(undefined, req.userId));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -79,7 +75,7 @@ habitsRouter.delete('/:id', async (req, res, next) => {
 });
 
 const checkSchema = Joi.object({
-  date: Joi.string().min(10).required(),
+  date: loggableDate().required(),
   count: Joi.number().integer().min(0).max(500).required(),
 });
 

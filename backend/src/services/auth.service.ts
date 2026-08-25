@@ -38,6 +38,12 @@ async function issueTokens(user: Pick<User, 'id' | 'email'>): Promise<AuthTokens
   return { accessToken, refreshToken };
 }
 
+/** A name left blank is absent, not an empty string sitting in the column. */
+function blankToNull(value: string | undefined | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function signup(
   email: string,
   password: string,
@@ -54,7 +60,7 @@ export async function signup(
     `INSERT INTO users (email, password_hash, first_name, last_name)
      VALUES ($1, $2, $3, $4)
      RETURNING id, email, first_name, last_name, active, created_at`,
-    [email.toLowerCase(), passwordHash, firstName ?? null, lastName ?? null]
+    [email.toLowerCase(), passwordHash, blankToNull(firstName), blankToNull(lastName)]
   );
 
   await query(`INSERT INTO profiles (user_id) VALUES ($1)`, [user!.id]);

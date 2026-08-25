@@ -19,8 +19,9 @@ userRouter.get('/me', async (req, res, next) => {
 });
 
 const updateSchema = Joi.object({
-  firstName: Joi.string().max(100),
-  lastName: Joi.string().max(100),
+  // Empty is how a form says "clear this", and how it says "I never had one".
+  firstName: Joi.string().max(100).allow(''),
+  lastName: Joi.string().max(100).allow(''),
   dateOfBirth: Joi.string().isoDate(),
   sex: Joi.string().valid('male', 'female', 'other'),
   heightCm: Joi.number().positive().max(300),

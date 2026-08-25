@@ -87,6 +87,9 @@ export function OnboardingPage() {
       heightCm: Number(heightCm),
       weightKg: Number(weightKg),
       activityLevel,
+      // Stored so anything server-side that has to guess a date guesses in the
+      // user's own zone rather than UTC.
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       goal,
       ...(goal === 'maintain' ? {} : { goalWeightKg: Number(goalWeightKg), rateKgPerWeek: rate }),
     });

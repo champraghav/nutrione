@@ -1,11 +1,13 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as nutritionService from '../services/nutrition.service';
 import * as recipesService from '../services/recipes.service';
 import * as visionService from '../services/vision.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
+import { dateParam } from './dateParam';
 
 export const nutritionRouter = Router();
 
@@ -42,7 +44,7 @@ nutritionRouter.get('/foods/:id', async (req, res, next) => {
 
 nutritionRouter.get('/logs', async (req, res, next) => {
   try {
-    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    const date = await dateParam(req.query.date, req.userId);
     const logs = await nutritionService.getLogsForDate(req.userId, date);
     res.json({ success: true, data: logs });
   } catch (err) {
@@ -52,7 +54,7 @@ nutritionRouter.get('/logs', async (req, res, next) => {
 
 nutritionRouter.get('/summary', async (req, res, next) => {
   try {
-    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    const date = await dateParam(req.query.date, req.userId);
     const summary = await nutritionService.getDailyNutrition(req.userId, date);
     res.json({ success: true, data: summary });
   } catch (err) {
@@ -73,7 +75,7 @@ nutritionRouter.get('/plan', async (req, res, next) => {
 
 nutritionRouter.get('/gaps', async (req, res, next) => {
   try {
-    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    const date = await dateParam(req.query.date, req.userId);
     const gaps = await nutritionService.getNutrientGaps(req.userId, date);
     res.json({ success: true, data: gaps });
   } catch (err) {
@@ -93,9 +95,11 @@ nutritionRouter.get('/history', async (req, res, next) => {
 
 const addMealSchema = Joi.object({
   foodId: Joi.string().uuid().required(),
-  quantity: Joi.number().positive().required(),
+  // Ten kilos or ten litres of a single food is already absurd, and the derived
+  // nutrient columns overflow above it.
+  quantity: Joi.number().positive().max(10000).required(),
   unit: Joi.string().required(),
-  date: Joi.string().isoDate().required(),
+  date: loggableDate().required(),
   mealType: Joi.string().valid('breakfast', 'lunch', 'dinner', 'snack'),
 });
 
@@ -150,13 +154,13 @@ nutritionRouter.post('/analyze-photo', validate(analyzePhotoSchema), async (req,
 });
 
 const bulkLogSchema = Joi.object({
-  date: Joi.string().isoDate().required(),
+  date: loggableDate().required(),
   mealType: Joi.string().valid('breakfast', 'lunch', 'dinner', 'snack'),
   items: Joi.array()
     .items(
       Joi.object({
         foodId: Joi.string().uuid().required(),
-        quantity: Joi.number().positive().required(),
+        quantity: Joi.number().positive().max(10000).required(),
         unit: Joi.string().required(),
       })
     )
@@ -220,7 +224,7 @@ nutritionRouter.get('/logged-dates', async (req, res, next) => {
 });
 
 const quickAddSchema = Joi.object({
-  date: Joi.string().min(10).required(),
+  date: loggableDate().required(),
   mealType: Joi.string().valid('breakfast', 'lunch', 'dinner', 'snack').required(),
   label: Joi.string().max(120).allow(''),
   calories: Joi.number().min(0).max(10000).required(),

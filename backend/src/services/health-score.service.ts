@@ -2,6 +2,8 @@ import { query, queryOne } from '../config/database';
 import { AppError } from '../utils/AppError';
 import { getHydrationTarget } from './hydration.service';
 import { getDailyTargets } from './nutrition.service';
+import { isValidDateString, shiftDate } from '../utils/dates';
+import { todayForUser } from './time.service';
 import { stepsToCalories } from './nutrition.calc';
 import {
   clamp,
@@ -178,11 +180,17 @@ export interface HealthScoreBreakdown {
   next_best: DimensionName | null;
 }
 
-export async function calculateHealthScore(userId: string, date: string): Promise<HealthScoreBreakdown> {
-  // Targets that accumulate through the day can only be judged once the day is
-  // done, so today is scored differently from the days behind it.
-  const isToday = date === new Date().toISOString().slice(0, 10);
-
+/**
+ * @param isToday whether `date` is the day the user is currently living in.
+ *   Passed in rather than derived here: the server clock is UTC and the user
+ *   is not, so comparing against the UTC date mis-classifies the day for
+ *   anyone east or west of the meridian.
+ */
+export async function calculateHealthScore(
+  userId: string,
+  date: string,
+  isToday: boolean
+): Promise<HealthScoreBreakdown> {
   const [sleep, activity, nutrition, hydration, wellbeing, vitals, goalProgress] = await Promise.all([
     scoreSleep(userId, date),
     scoreActivity(userId, date),
@@ -256,17 +264,22 @@ export async function calculateHealthScore(userId: string, date: string): Promis
   return breakdown;
 }
 
-export async function getTodayScore(userId: string) {
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+/**
+ * @param clientDate the caller's own calendar date. The web client knows its
+ *   timezone and sends it; without one we fall back to the timezone on the
+ *   profile, and only then to UTC.
+ */
+export async function getTodayScore(userId: string, clientDate?: string) {
+  const today = isValidDateString(clientDate) ? clientDate : await todayForUser(userId);
+  const yesterday = shiftDate(today, -1);
 
   // Yesterday is re-scored on the way past. Its stored row is whatever was
   // computed while it was still the current day, with the accumulating
   // dimensions deferred — so without this, every day in the history keeps the
   // provisional score it had at noon and the trend is permanently flattering.
   const [breakdown, sealed] = await Promise.all([
-    calculateHealthScore(userId, today),
-    calculateHealthScore(userId, yesterday),
+    calculateHealthScore(userId, today, true),
+    calculateHealthScore(userId, yesterday, false),
   ]);
 
   const previous = sealed.overall_score === null ? null : { overall_score: sealed.overall_score };

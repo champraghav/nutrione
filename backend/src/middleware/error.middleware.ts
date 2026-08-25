@@ -28,6 +28,22 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return;
   }
 
+  // Postgres data errors that are really bad input: a number too large for its
+  // column (22003), a malformed date or number (22007/22P02). These are the
+  // user's mistake, not the server's, and answering them with a 500 hides that.
+  const pgCode = err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : '';
+  if (pgCode === '22003' || pgCode === '22007' || pgCode === '22P02') {
+    logger.warn({ err, path: req.path }, 'Rejected out-of-range or malformed input');
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'VALUE_OUT_OF_RANGE',
+        message: 'One of those numbers is too large or not in a format we can read. Please check and try again.',
+      },
+    });
+    return;
+  }
+
   logger.error({ err, path: req.path }, 'Unhandled error');
   res.status(500).json({
     success: false,

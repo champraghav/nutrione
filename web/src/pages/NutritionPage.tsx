@@ -362,19 +362,24 @@ export function NutritionPage() {
         {!selectedFood && results.length > 0 && (
           <ul className="mt-2 divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
             {results.map((food) => (
-              <li
-                key={food.id}
-                className="p-3 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
-                onClick={() => pickFood(food)}
-              >
-                <div>
-                  <p className="text-sm font-medium">{food.name}</p>
-                  {food.name_hi && <p className="text-xs text-gray-400">{food.name_hi}</p>}
-                </div>
-                <p className="text-xs text-gray-500">
-                  {n(food.calories).toFixed(0)} kcal / {n(food.serving_size)}
-                  {food.serving_unit}
-                </p>
+              <li key={food.id}>
+                {/* A real button, not a clickable <li>: picking a food is the
+                    main thing this app does, and it has to be reachable by
+                    keyboard and announced as something you can activate. */}
+                <button
+                  type="button"
+                  onClick={() => pickFood(food)}
+                  className="w-full text-left p-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 flex justify-between items-center gap-3"
+                >
+                  <span>
+                    <span className="block text-sm font-medium">{food.name}</span>
+                    {food.name_hi && <span className="block text-xs text-gray-400">{food.name_hi}</span>}
+                  </span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                    {n(food.calories).toFixed(0)} kcal / {n(food.serving_size)}
+                    {food.serving_unit}
+                  </span>
+                </button>
               </li>
             ))}
           </ul>

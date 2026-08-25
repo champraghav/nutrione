@@ -85,6 +85,28 @@ export async function deleteOwnFood(userId: string, foodId: string): Promise<voi
     );
   }
 
+  // A food a recipe is built from cannot go either. recipe_ingredients cascades
+  // on delete, so without this the ingredient row vanishes while the recipe
+  // keeps the per-serving numbers it had — leaving a recipe that reports 300
+  // kcal from no ingredients and logs meals at that figure for ever.
+  const usedIn = await query<{ name: string }>(
+    `SELECT DISTINCT f.name FROM recipe_ingredients ri
+     JOIN foods f ON f.id = ri.recipe_food_id
+     WHERE ri.food_id = $1
+     ORDER BY f.name
+     LIMIT 5`,
+    [foodId]
+  );
+  if (usedIn.length > 0) {
+    const names = usedIn.map((r) => r.name).join(', ');
+    throw AppError.badRequest(
+      `This food is an ingredient in ${names}. Remove it from ${
+        usedIn.length === 1 ? 'that recipe' : 'those recipes'
+      } first.`,
+      'FOOD_IN_RECIPE'
+    );
+  }
+
   await query('DELETE FROM foods WHERE id = $1 AND owner_user_id = $2', [foodId, userId]);
 }
 
@@ -123,6 +145,32 @@ export async function getRecipeIngredients(recipeFoodId: string): Promise<Recipe
      ORDER BY ri.sort_order ASC, ri.created_at ASC`,
     [recipeFoodId]
   );
+}
+
+/**
+ * Whether adding `ingredientId` to `recipeFoodId` would close a loop.
+ *
+ * Nesting recipes is legitimate and useful — a curry that uses your own spice
+ * mix — because a sub-recipe's stored per-serving numbers are already correct
+ * to read. A *cycle* is not: if A contains B and B contains A, each one's
+ * nutrition is derived from the other's, so whichever was recalculated last
+ * wins and editing either silently leaves the other wrong. There is no order
+ * that converges, so the edge has to be refused up front.
+ *
+ * Walks the ingredient graph from the food being added: if the recipe is
+ * reachable from it, the new edge would complete a circuit.
+ */
+async function wouldCycle(recipeFoodId: string, ingredientId: string): Promise<boolean> {
+  const hit = await queryOne<{ found: number }>(
+    `WITH RECURSIVE reachable(id) AS (
+       SELECT $1::uuid
+       UNION
+       SELECT ri.food_id FROM recipe_ingredients ri JOIN reachable r ON ri.recipe_food_id = r.id
+     )
+     SELECT 1 AS found FROM reachable WHERE id = $2::uuid LIMIT 1`,
+    [ingredientId, recipeFoodId]
+  );
+  return hit !== null && hit !== undefined;
 }
 
 /**
@@ -182,6 +230,12 @@ export async function addIngredient(
   if (!ingredient) throw AppError.notFound('Ingredient food not found');
   if (input.foodId === recipeFoodId) {
     throw AppError.badRequest('A recipe cannot contain itself.', 'RECIPE_SELF_REFERENCE');
+  }
+  if (await wouldCycle(recipeFoodId, input.foodId)) {
+    throw AppError.badRequest(
+      'That would make two recipes contain each other, so neither could be worked out.',
+      'RECIPE_CYCLE'
+    );
   }
 
   const order = await queryOne<{ next: number }>(

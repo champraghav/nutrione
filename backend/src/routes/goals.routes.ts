@@ -23,7 +23,7 @@ const createSchema = Joi.object({
   type: Joi.string().max(100).required(),
   targetValue: Joi.number().positive().required(),
   currentValue: Joi.number().min(0),
-  unit: Joi.string().max(20),
+  unit: Joi.string().max(20).allow(''),
   targetDate: Joi.string().isoDate(),
 });
 

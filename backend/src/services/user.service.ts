@@ -49,12 +49,31 @@ export interface UpdateUserInput {
   onboarded?: boolean;
 }
 
+/**
+ * Distinguishes "leave it alone" from "clear it".
+ *
+ * undefined means the field was not in the request, so COALESCE keeps what is
+ * stored. An empty string is a deliberate clear and becomes NULL — a name
+ * column holding '' would render as a blank where a name should be.
+ */
+function nameUpdate(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function updateMe(userId: string, input: UpdateUserInput): Promise<UserProfile> {
-  if (input.firstName !== undefined || input.lastName !== undefined) {
+  const firstName = nameUpdate(input.firstName);
+  const lastName = nameUpdate(input.lastName);
+
+  if (firstName !== undefined || lastName !== undefined) {
     await query(
-      `UPDATE users SET first_name = COALESCE($2, first_name), last_name = COALESCE($3, last_name), updated_at = now()
+      `UPDATE users SET
+         first_name = CASE WHEN $4 THEN $2 ELSE first_name END,
+         last_name  = CASE WHEN $5 THEN $3 ELSE last_name END,
+         updated_at = now()
        WHERE id = $1`,
-      [userId, input.firstName ?? null, input.lastName ?? null]
+      [userId, firstName ?? null, lastName ?? null, firstName !== undefined, lastName !== undefined]
     );
   }
 

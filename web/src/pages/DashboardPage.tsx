@@ -82,7 +82,7 @@ export function DashboardPage() {
   const today = todayLocal();
 
   useEffect(() => {
-    Promise.all([api.getHealthScore(), api.getNutritionSummary(today)]).then(([scoreRes, summaryRes]) => {
+    Promise.all([api.getHealthScore(today), api.getNutritionSummary(today)]).then(([scoreRes, summaryRes]) => {
       if (scoreRes.success) setScore(scoreRes.data as ScoreBreakdown);
       if (summaryRes.success) setBudget((summaryRes.data as { budget: Budget }).budget);
       setLoading(false);

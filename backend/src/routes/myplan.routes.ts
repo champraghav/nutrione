@@ -1,9 +1,11 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as coachService from '../services/coach.service';
 import * as plansService from '../services/plans.service';
 import { requireAuth } from '../middleware/auth.middleware';
+import { dateParam } from './dateParam';
 import { validate } from '../middleware/validate.middleware';
 
 /**
@@ -14,17 +16,11 @@ export const myPlanRouter = Router();
 
 myPlanRouter.use(requireAuth);
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
-function dateParam(value: unknown): string {
-  return typeof value === 'string' && value.length >= 10 ? value.slice(0, 10) : today();
-}
 
 myPlanRouter.get('/', async (req, res, next) => {
   try {
-    const date = dateParam(req.query.date);
+    const date = await dateParam(req.query.date, req.userId);
     const [plans, adherence] = await Promise.all([
       plansService.plansForUserOnDate(req.userId, date),
       plansService.adherenceForDate(req.userId, date),
@@ -37,7 +33,7 @@ myPlanRouter.get('/', async (req, res, next) => {
 
 myPlanRouter.post(
   '/items/:itemId/check',
-  validate(Joi.object({ date: Joi.string().min(10).required(), done: Joi.boolean().required() })),
+  validate(Joi.object({ date: loggableDate().required(), done: Joi.boolean().required() })),
   async (req, res, next) => {
     try {
       const { date, done } = req.body as { date: string; done: boolean };
@@ -55,7 +51,7 @@ myPlanRouter.post(
 
 myPlanRouter.get('/report', async (req, res, next) => {
   try {
-    res.json({ success: true, data: await plansService.weeklyReport(req.userId, dateParam(req.query.date)) });
+    res.json({ success: true, data: await plansService.weeklyReport(req.userId, await dateParam(req.query.date, req.userId)) });
   } catch (err) {
     next(err);
   }

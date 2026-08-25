@@ -1,6 +1,7 @@
 import '../types';
 import { Router } from 'express';
 import Joi from 'joi';
+import { loggableDate } from './logDate';
 import * as fitnessService from '../services/fitness.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -49,7 +50,7 @@ fitnessRouter.get('/workouts/:id', async (req, res, next) => {
 });
 
 const createWorkoutSchema = Joi.object({
-  date: Joi.string().isoDate().required(),
+  date: loggableDate().required(),
   durationMinutes: Joi.number().integer().min(0).required(),
   workoutType: Joi.string().required(),
   intensity: Joi.string().valid('light', 'moderate', 'intense'),

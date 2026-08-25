@@ -123,7 +123,9 @@ export const api = {
   deleteMe: () => request(http.delete('/users/me')),
 
   // Health
-  getHealthScore: () => request(http.get('/health/score')),
+  // Sends the browser's own calendar date: the server clock is UTC and the
+  // user is not, so it cannot work out which day this is on its own.
+  getHealthScore: (date?: string) => request(http.get('/health/score', { params: { date } })),
   getHealthScoreHistory: (days = 30) => request(http.get('/health/score/history', { params: { days } })),
   getHealthMetrics: (type?: string, days = 30) => request(http.get('/health/metrics', { params: { type, days } })),
   logHealthMetric: (type: string, value: number, unit?: string) =>
