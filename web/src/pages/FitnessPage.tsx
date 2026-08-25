@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
+import { ErrorNote, errorMessage } from '@components/ErrorNote';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
@@ -71,6 +72,7 @@ export function FitnessPage() {
   const [workoutType, setWorkoutType] = useState('strength');
   const [intensity, setIntensity] = useState('moderate');
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [exerciseId, setExerciseId] = useState('');
   const [reps, setReps] = useState('10');
@@ -102,29 +104,42 @@ export function FitnessPage() {
   const onCreateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
+    setError(null);
     const res = await api.createWorkout(todayLocal(), Number(duration), workoutType, intensity);
     setCreating(false);
-    if (res.success) {
-      setActiveWorkoutId((res.data as Workout).id);
-      refresh();
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not save that workout.'));
+      return;
     }
+    setActiveWorkoutId((res.data as Workout).id);
+    refresh();
   };
 
   const onAddExercise = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeWorkoutId || !exerciseId) return;
     setAddingExercise(true);
-    await api.addWorkoutExercise(activeWorkoutId, {
+    setError(null);
+    const res = await api.addWorkoutExercise(activeWorkoutId, {
       exerciseId,
       reps: Number(reps),
       weightKg: Number(weight),
     });
     setAddingExercise(false);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not add that set.'));
+      return;
+    }
     refresh();
   };
 
   const onDelete = async (id: string) => {
-    await api.deleteWorkout(id);
+    setError(null);
+    const res = await api.deleteWorkout(id);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not delete that workout.'));
+      return;
+    }
     if (activeWorkoutId === id) setActiveWorkoutId(null);
     refresh();
   };
@@ -140,6 +155,7 @@ export function FitnessPage() {
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Log a workout</h2>
+        <ErrorNote message={error} />
         <form onSubmit={onCreateWorkout} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
           <Select label="Type" value={workoutType} onChange={(e) => setWorkoutType(e.target.value)}>
             {WORKOUT_TYPES.map((t) => (

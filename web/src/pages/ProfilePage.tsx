@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@api/client';
+import { ErrorNote, errorMessage } from '@components/ErrorNote';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
@@ -49,6 +50,7 @@ export function ProfilePage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.getMe().then((res) => {
@@ -89,7 +91,12 @@ export function ProfilePage() {
         : { goalWeightKg: Number(goalWeightKg), rateKgPerWeek: rate }),
     });
     setSaving(false);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not save your profile.'));
+      return;
+    }
     if (res.success) {
+      setError(null);
       setProfile(res.data as Profile);
       setSaved(true);
       // The targets are derived from what was just saved, so re-read them
@@ -108,6 +115,7 @@ export function ProfilePage() {
       </div>
 
       <form onSubmit={onSubmit} className="card space-y-4">
+        <ErrorNote message={error} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
           <Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
+import { ErrorNote, errorMessage } from '@components/ErrorNote';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
@@ -46,6 +47,7 @@ export function VitalsPage() {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ height_cm: string | number | null } | null>(null);
 
   const selected = METRIC_TYPES.find((m) => m.value === type)!;
@@ -74,7 +76,12 @@ export function VitalsPage() {
     }
 
     setSaving(false);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not log that reading.'));
+      return;
+    }
     if (res.success) {
+      setError(null);
       setSaved(true);
       setValue('');
       load();

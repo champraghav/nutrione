@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
+import { ErrorNote, errorMessage } from '@components/ErrorNote';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Select } from '@components/Select';
@@ -51,6 +52,7 @@ export function SleepPage() {
   const [wakeTime, setWakeTime] = useState('07:00');
   const [quality, setQuality] = useState('4');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
     const [logsRes, trendRes] = await Promise.all([api.getSleepLogs(30), api.getSleepTrend(trendPeriod)]);
@@ -66,8 +68,13 @@ export function SleepPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    await api.logSleep(todayLocal(), bedtime, wakeTime, Number(quality));
+    setError(null);
+    const res = await api.logSleep(todayLocal(), bedtime, wakeTime, Number(quality));
     setSubmitting(false);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not save that night. Please check the times.'));
+      return;
+    }
     refresh();
   };
 
@@ -77,7 +84,12 @@ export function SleepPage() {
   };
 
   const onDelete = async (id: string) => {
-    await api.deleteSleep(id);
+    setError(null);
+    const res = await api.deleteSleep(id);
+    if (!res.success) {
+      setError(errorMessage(res, 'Could not delete that entry.'));
+      return;
+    }
     refresh();
   };
 
@@ -90,6 +102,7 @@ export function SleepPage() {
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Log sleep for today</h2>
+        <ErrorNote message={error} />
         <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
           <Input label="Bedtime" type="time" value={bedtime} onChange={(e) => setBedtime(e.target.value)} />
           <Input label="Wake time" type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} />
