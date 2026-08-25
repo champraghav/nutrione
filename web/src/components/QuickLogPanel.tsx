@@ -75,7 +75,9 @@ export function QuickLogPanel({
     );
     setBusy(null);
     if (res.success) {
-      setMessage(`Logged ${food.name}`);
+      // Say which it was: "Logged" for something the server has, and something
+      // honest for a write still sitting in the offline queue.
+      setMessage(res.queued ? `${food.name} saved — will sync` : `Logged ${food.name}`);
       onLogged();
       load();
     }

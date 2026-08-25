@@ -553,3 +553,18 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rate_kg_per_week NUMERIC(3,2);
 -- Set once the onboarding wizard has been through, so it is offered exactly
 -- once and never again on a returning login.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+
+-- Idempotency keys for the writes that *add* a row.
+--
+-- Anything logged while offline is replayed when the connection returns, and a
+-- reply lost in transit would otherwise log the meal twice. Steps and habit
+-- ticks set a value rather than adding to one, so they are already safe to
+-- repeat; these two are not. The client sends a token it generated, and a
+-- second arrival with the same token does nothing.
+ALTER TABLE meal_items ADD COLUMN IF NOT EXISTS client_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_items_client_token
+  ON meal_items(user_id, client_token) WHERE client_token IS NOT NULL;
+
+ALTER TABLE hydration_entries ADD COLUMN IF NOT EXISTS client_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hydration_client_token
+  ON hydration_entries(user_id, client_token) WHERE client_token IS NOT NULL;

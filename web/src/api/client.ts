@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { dropWrite, isRetryable, loadQueue, newToken, queueWrite } from '@utils/offlineQueue';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -6,6 +7,8 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: { code: string; message: string };
+  /** Accepted into the offline backlog rather than sent. Not yet on the server. */
+  queued?: boolean;
 }
 
 const TOKEN_KEY = 'health_os_tokens';
@@ -89,6 +92,93 @@ async function request<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<A
   }
 }
 
+/**
+ * A write that should survive being made with no signal.
+ *
+ * Tries the network first — being offline is usually brief and a real response
+ * is always better. If the request never got a reply, it is kept and reported
+ * as queued rather than failed, so the UI can say "saved, waiting to sync"
+ * instead of throwing away what the user typed.
+ *
+ * The token doubles as the queue id and the server's idempotency key, so the
+ * replay of a request whose reply was merely lost is a no-op rather than a
+ * second helping.
+ */
+async function queueableWrite<T>(
+  url: string,
+  body: Record<string, unknown>,
+  label: string
+): Promise<ApiResponse<T>> {
+  const token = newToken();
+  const payload = { ...body, clientToken: token };
+
+  try {
+    const res = await http.post<ApiResponse<T>>(url, payload);
+    return res.data;
+  } catch (err) {
+    const axiosErr = err as AxiosError<ApiResponse<T>>;
+    if (axiosErr.response?.data) return axiosErr.response.data;
+
+    if (isRetryable(axiosErr.response?.status)) {
+      queueWrite({ id: token, url, body: payload, label });
+      notifyQueueChanged();
+      return { success: true, queued: true } as ApiResponse<T>;
+    }
+    return { success: false, error: { code: 'NETWORK_ERROR', message: axiosErr.message } };
+  }
+}
+
+type QueueListener = () => void;
+const queueListeners = new Set<QueueListener>();
+
+/** Lets the UI re-read the backlog whenever it changes. */
+export function onQueueChanged(listener: QueueListener): () => void {
+  queueListeners.add(listener);
+  return () => queueListeners.delete(listener);
+}
+
+function notifyQueueChanged(): void {
+  queueListeners.forEach((l) => l());
+}
+
+let syncing = false;
+
+/**
+ * Replays the backlog oldest-first, stopping at the first one that fails.
+ *
+ * Order matters — these are diary entries — and pressing on after a failure
+ * would apply them out of sequence. A rejected write is dropped rather than
+ * retried for ever: the server has considered it and will keep saying no.
+ */
+export async function syncQueue(): Promise<{ sent: number; remaining: number }> {
+  if (syncing) return { sent: 0, remaining: loadQueue().length };
+  syncing = true;
+  let sent = 0;
+
+  try {
+    for (const write of loadQueue()) {
+      try {
+        const res = await http.post<ApiResponse<unknown>>(write.url, write.body);
+        if (res.data.success) {
+          dropWrite(write.id);
+          sent += 1;
+        } else {
+          dropWrite(write.id);
+        }
+      } catch (err) {
+        const axiosErr = err as AxiosError;
+        if (isRetryable(axiosErr.response?.status)) break;
+        dropWrite(write.id);
+      }
+    }
+  } finally {
+    syncing = false;
+    notifyQueueChanged();
+  }
+
+  return { sent, remaining: loadQueue().length };
+}
+
 export const api = {
   // Auth
   signup: (email: string, password: string, firstName?: string, lastName?: string) =>
@@ -147,7 +237,7 @@ export const api = {
 
   // Hydration
   getHydration: (date?: string) => request(http.get('/hydration', { params: { date } })),
-  addWater: (amountMl: number, date?: string) => request(http.post('/hydration', { amountMl, date })),
+  addWater: (amountMl: number, date?: string) => queueableWrite('/hydration', { amountMl, date }, 'Water'),
   removeWaterEntry: (id: string) => request(http.delete(`/hydration/${id}`)),
   getHydrationHistory: (days = 14) => request(http.get('/hydration/history', { params: { days } })),
 
@@ -164,8 +254,9 @@ export const api = {
   createHabit: (data: Record<string, unknown>) => request(http.post('/habits', data)),
   updateHabit: (id: string, data: Record<string, unknown>) => request(http.put(`/habits/${id}`, data)),
   archiveHabit: (id: string) => request(http.delete(`/habits/${id}`)),
+  // Same: sets the count rather than incrementing it.
   checkHabit: (id: string, date: string, count: number) =>
-    request(http.post(`/habits/${id}/check`, { date, count })),
+    queueableWrite(`/habits/${id}/check`, { date, count }, 'Habit'),
 
   // Fast logging
   getRecentFoods: () => request(http.get('/nutrition/recent-foods')),
@@ -190,7 +281,9 @@ export const api = {
 
   // Steps
   getSteps: (date: string) => request(http.get('/steps', { params: { date } })),
-  setSteps: (date: string, steps: number) => request(http.post('/steps', { date, steps })),
+  // Steps replace the day's count rather than adding to it, so a replay is
+  // already harmless without a token.
+  setSteps: (date: string, steps: number) => queueableWrite('/steps', { date, steps }, 'Steps'),
   getStepHistory: (days = 14) => request(http.get('/steps/history', { params: { days } })),
 
   // Coaching - coach side
@@ -237,7 +330,7 @@ export const api = {
   getNutritionSummary: (date: string) => request(http.get('/nutrition/summary', { params: { date } })),
   getNutritionHistory: (days = 30) => request(http.get('/nutrition/history', { params: { days } })),
   addMealItem: (foodId: string, quantity: number, unit: string, date: string, mealType?: string) =>
-    request(http.post('/nutrition/meals', { foodId, quantity, unit, date, mealType })),
+    queueableWrite('/nutrition/meals', { foodId, quantity, unit, date, mealType }, 'Meal'),
   removeMealItem: (itemId: string) => request(http.delete(`/nutrition/meals/${itemId}`)),
 
   // Fitness

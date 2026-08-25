@@ -101,17 +101,21 @@ const addMealSchema = Joi.object({
   unit: Joi.string().required(),
   date: loggableDate().required(),
   mealType: Joi.string().valid('breakfast', 'lunch', 'dinner', 'snack'),
+  // Set by the client for anything logged offline, so replaying it after the
+  // connection returns cannot log the same meal twice.
+  clientToken: Joi.string().max(64),
 });
 
 nutritionRouter.post('/meals', validate(addMealSchema), async (req, res, next) => {
   try {
-    const { foodId, quantity, unit, date, mealType } = req.body;
+    const { foodId, quantity, unit, date, mealType, clientToken } = req.body;
     const item = await nutritionService.addMealItem(req.userId, {
       foodId,
       quantity,
       unit,
       logDate: date,
       mealType,
+      clientToken,
     });
     res.status(201).json({ success: true, data: item });
   } catch (err) {

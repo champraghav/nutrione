@@ -42,13 +42,19 @@ export function StepsCard({ date, onChange }: { date: string; onChange?: () => v
     setBusy(true);
     const res = await api.setSteps(date, steps);
     setBusy(false);
-    if (res.success) {
-      const d = res.data as StepDay;
-      setData(d);
-      setValue(String(d.steps));
-      setEditing(false);
-      onChange?.();
+    if (!res.success) return;
+
+    // Queued offline: no server data to apply, so show the count that will be
+    // sent. Steps replace the day's total rather than adding to it, which
+    // makes the local figure exactly what the server will end up with.
+    if (res.queued) {
+      setData((prev) => (prev ? { ...prev, steps } : prev));
+    } else {
+      setData(res.data as StepDay);
     }
+    setValue(String(steps));
+    setEditing(false);
+    onChange?.();
   };
 
   if (!data) return null;

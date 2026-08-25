@@ -37,6 +37,19 @@ scores what you log, so with nothing logged there is nothing to score.
 
 To stop everything: `docker compose down` (add `-v` to also wipe the database).
 
+### Installing it to a phone
+
+Health OS is a progressive web app: opened over HTTPS, a phone browser offers
+"Add to Home Screen", after which it launches without browser chrome. A service
+worker caches the interface, so it opens with no connection at all — and meals,
+water, steps and habit ticks logged offline are held and sent the moment you
+reconnect. A banner says how many are waiting. Nothing is lost in a basement
+restaurant or on the Underground.
+
+The app shell is cached; your health data never is. Stale totals shown as
+though they were current would be worse than an honest "couldn't load" — you
+would log a meal against yesterday's numbers without noticing.
+
 ### Optional: plate photo scanning
 
 Scanning a photo of your meal to identify the foods on it needs an Anthropic

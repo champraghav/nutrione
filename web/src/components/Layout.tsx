@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAppStore } from '@store/app.store';
+import { OfflineBanner } from './OfflineBanner';
 
 interface NavItem {
   to: string;
@@ -157,6 +158,8 @@ export function Layout() {
           </div>
         </div>
       </nav>
+
+      <OfflineBanner />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Outlet />

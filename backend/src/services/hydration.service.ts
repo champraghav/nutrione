@@ -50,12 +50,22 @@ async function recalcTotal(userId: string, logDate: string): Promise<number> {
   return total;
 }
 
-export async function addWater(userId: string, logDate: string, amountMl: number): Promise<HydrationDay> {
-  await query('INSERT INTO hydration_entries (user_id, log_date, amount_ml) VALUES ($1, $2, $3)', [
-    userId,
-    logDate,
-    amountMl,
-  ]);
+export async function addWater(
+  userId: string,
+  logDate: string,
+  amountMl: number,
+  clientToken?: string | null
+): Promise<HydrationDay> {
+  // DO NOTHING on a repeated token: this same glass, queued offline and
+  // replayed after the reply was lost, must not be counted twice.
+  const inserted = await query(
+    `INSERT INTO hydration_entries (user_id, log_date, amount_ml, client_token)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, client_token) WHERE client_token IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [userId, logDate, amountMl, clientToken ?? null]
+  );
+  if (inserted.length === 0) return getHydrationForDate(userId, logDate);
 
   await query(
     `INSERT INTO health_timeline_events (user_id, event_type, title, metadata)

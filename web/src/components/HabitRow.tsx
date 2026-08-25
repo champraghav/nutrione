@@ -31,6 +31,10 @@ export function HabitRow({
   const send = async (next: number) => {
     setPending(next);
     const res = await api.checkHabit(habit.id, date, next);
+    if (res.success && res.queued) {
+      // Hold the optimistic count until it syncs, rather than snapping back.
+      return;
+    }
     setPending(null);
     if (res.success) onChanged(res.data);
   };

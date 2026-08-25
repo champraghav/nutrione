@@ -23,7 +23,9 @@ export function HabitsCard() {
     const done = habit.count_today >= habit.target_per_day;
     const next = done ? 0 : habit.target_per_day > 1 ? habit.count_today + 1 : habit.target_per_day;
     const res = await api.checkHabit(habit.id, date, next);
-    if (res.success) setHabits(res.data as Habit[]);
+    // Nothing comes back from a queued tick, and streaks are the server's to
+    // work out — so leave the list as it is rather than blanking it.
+    if (res.success && !res.queued) setHabits(res.data as Habit[]);
   };
 
   if (habits === null) return null;

@@ -199,6 +199,12 @@ export interface AddMealItemInput {
   unit: string;
   logDate: string;
   mealType?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  /**
+   * Client-generated key making a repeat harmless. Set for anything logged
+   * offline and replayed later, where the reply to the first attempt may have
+   * been lost and the meal must not land twice.
+   */
+  clientToken?: string | null;
 }
 
 export async function addMealItem(userId: string, input: AddMealItemInput) {
@@ -206,8 +212,9 @@ export async function addMealItem(userId: string, input: AddMealItemInput) {
   const ratio = input.quantity / food.serving_size;
 
   const item = await queryOne(
-    `INSERT INTO meal_items (user_id, food_id, log_date, meal_type, quantity, unit, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `INSERT INTO meal_items (user_id, food_id, log_date, meal_type, quantity, unit, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g, client_token)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     ON CONFLICT (user_id, client_token) WHERE client_token IS NOT NULL DO NOTHING
      RETURNING *`,
     [
       userId,
@@ -224,8 +231,19 @@ export async function addMealItem(userId: string, input: AddMealItemInput) {
       (food.sugar_g ?? 0) * ratio,
       (food.sodium_mg ?? 0) * ratio,
       (food.saturated_fat_g ?? 0) * ratio,
+      input.clientToken ?? null,
     ]
   );
+
+  // Already logged under this token — the earlier attempt did land, whatever
+  // the client saw. Report the day as it stands rather than adding a second.
+  if (!item) {
+    await recalcDailyTotals(userId, input.logDate);
+    return queryOne(
+      'SELECT * FROM meal_items WHERE user_id = $1 AND client_token = $2',
+      [userId, input.clientToken]
+    );
+  }
 
   await query(
     `INSERT INTO health_timeline_events (user_id, event_type, title, metadata)

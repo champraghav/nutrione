@@ -36,12 +36,23 @@ hydrationRouter.get('/history', async (req, res, next) => {
 const addWaterSchema = Joi.object({
   amountMl: Joi.number().integer().min(1).max(3000).required(),
   date: loggableDate(),
+  // See the meal route: makes an offline replay harmless.
+  clientToken: Joi.string().max(64),
 });
 
 hydrationRouter.post('/', validate(addWaterSchema), async (req, res, next) => {
   try {
-    const { amountMl, date } = req.body as { amountMl: number; date?: string };
-    const data = await hydrationService.addWater(req.userId, await dateParam(date, req.userId), amountMl);
+    const { amountMl, date, clientToken } = req.body as {
+      amountMl: number;
+      date?: string;
+      clientToken?: string;
+    };
+    const data = await hydrationService.addWater(
+      req.userId,
+      await dateParam(date, req.userId),
+      amountMl,
+      clientToken
+    );
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);

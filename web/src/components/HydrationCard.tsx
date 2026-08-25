@@ -39,10 +39,21 @@ export function HydrationCard({ date, onChange }: { date: string; onChange?: () 
     setBusy(true);
     const res = await api.addWater(ml, date);
     setBusy(false);
-    if (res.success) {
+    if (!res.success) return;
+
+    // A queued write carries no server data. Assigning it would blank the card
+    // — taking the buttons with it — so the total is advanced locally instead.
+    // It is guaranteed to be delivered, so this is a preview, not a guess.
+    if (res.queued) {
+      setData((prev) =>
+        prev
+          ? { ...prev, total_ml: prev.total_ml + ml, remaining_ml: Math.max(0, prev.remaining_ml - ml) }
+          : prev
+      );
+    } else {
       setData(res.data as HydrationDay);
-      onChange?.();
     }
+    onChange?.();
   };
 
   const undo = async (id: string) => {

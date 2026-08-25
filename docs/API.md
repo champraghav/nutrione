@@ -35,6 +35,25 @@ Errors worth handling specifically:
 Optional string fields accept `""`. That is how a form says "leave this
 blank", and it is stored as NULL rather than as an empty string.
 
+## Logging offline
+
+A diary is used where the signal is worst, so the four logging endpoints accept
+a `clientToken` — a key the client generates — and treat a second arrival
+bearing the same one as a no-op:
+
+- `POST /nutrition/meals` and `POST /hydration` store it and skip the insert on
+  a repeat, because both *add* a row.
+- `POST /steps` and `POST /habits/:id/check` ignore it: both set a value rather
+  than adding to one, so a replay was already harmless.
+
+The web client queues a write only when the request provably never arrived —
+a network failure with no response at all. Anything the server answered,
+including a rejection, is left alone: retrying a 4xx would fail identically,
+and retrying a 5xx risks doubling a write the server may already have applied.
+The token doubles as the queue id, so the one case a queue cannot otherwise
+survive — the request landed but its reply was lost — resolves to a no-op
+rather than a second helping.
+
 ## Auth
 
 ### POST /auth/signup
