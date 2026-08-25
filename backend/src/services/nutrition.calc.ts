@@ -14,12 +14,19 @@ export interface DailyTargets {
   saturated_fat_g: number;
 }
 
+/** Lose weight, hold it, or put it on. */
+export type WeightGoal = 'lose' | 'maintain' | 'gain';
+
 export interface TargetInputs {
   weightKg: number | null;
   heightCm: number | null;
   ageYears: number | null;
   sex: string | null;
   activityLevel: string | null;
+  /** Defaults to 'maintain', which is what a profile with no goal set means. */
+  goal?: WeightGoal | null;
+  /** Kilograms per week, always a magnitude — the goal supplies the sign. */
+  rateKgPerWeek?: number | null;
 }
 
 export const ACTIVITY_MULTIPLIERS: Record<string, number> = {
@@ -30,10 +37,52 @@ export const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   very_active: 1.9,
 };
 
+/**
+ * A kilogram of body mass is worth roughly 7,700 kcal, so a kilo a week is a
+ * 1,100 kcal daily gap. The figure is a population average for fat tissue and
+ * the real number drifts as body composition changes; it is the standard
+ * planning constant, not a promise.
+ */
+export const KCAL_PER_KG = 7700;
+
+/**
+ * Ceilings on how fast a plan may aim to change weight. Losing faster than a
+ * kilo a week costs mostly lean mass, and gaining faster than half a kilo is
+ * mostly fat, so asking for more is not a preference the app can honour.
+ */
+export const MAX_LOSS_KG_PER_WEEK = 1;
+export const MAX_GAIN_KG_PER_WEEK = 0.5;
+
+/**
+ * Intakes nothing may be prescribed below. Eating under these is a clinical
+ * decision, not a slider position, so the deficit gets cut instead — the user
+ * is told their achievable rate rather than handed an unsafe number.
+ */
+export const MIN_CALORIES_MALE = 1500;
+export const MIN_CALORIES_OTHER = 1200;
+
 export function calculateAge(dob: string, now: Date = new Date()): number | null {
   const birth = new Date(dob);
   if (Number.isNaN(birth.getTime())) return null;
   return Math.floor((now.getTime() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+export interface TargetPlan {
+  targets: DailyTargets;
+  /** What this body burns in a day. The target is this plus or minus the gap. */
+  maintenanceCalories: number;
+  goal: WeightGoal;
+  /** What the user asked for, after the safe ceiling on pace. */
+  requestedRateKgPerWeek: number;
+  /**
+   * What the prescribed intake actually delivers. Lower than requested when
+   * the minimum-intake floor cut the deficit short.
+   */
+  actualRateKgPerWeek: number;
+  /** True when that floor bound the result, so the UI can say why. */
+  floored: boolean;
+  /** False when the profile lacks weight/height/age and 2000 kcal is a guess. */
+  personalised: boolean;
 }
 
 /**
@@ -41,18 +90,72 @@ export function calculateAge(dob: string, now: Date = new Date()): number | null
  * a flat 2000 kcal when the profile lacks weight/height/age, so targets are
  * usable before the user has filled anything in.
  */
-export function calculateTargets(input: TargetInputs): DailyTargets {
+export function maintenanceCalories(input: TargetInputs): { calories: number; personalised: boolean } {
   const { weightKg, heightCm, ageYears, sex } = input;
   const activityMultiplier = ACTIVITY_MULTIPLIERS[input.activityLevel ?? 'moderate'] ?? 1.55;
 
-  let calories = 2000;
-  if (weightKg && heightCm && ageYears !== null) {
-    const base = 10 * weightKg + 6.25 * heightCm - 5 * ageYears;
-    const bmr = sex === 'male' ? base + 5 : sex === 'female' ? base - 161 : base - 78;
-    calories = Math.max(1200, Math.round(bmr * activityMultiplier));
+  if (!weightKg || !heightCm || ageYears === null || ageYears === undefined) {
+    return { calories: 2000, personalised: false };
   }
 
-  const proteinG = weightKg ? Math.round(weightKg * 1.6) : 60;
+  const base = 10 * weightKg + 6.25 * heightCm - 5 * ageYears;
+  const bmr = sex === 'male' ? base + 5 : sex === 'female' ? base - 161 : base - 78;
+  return { calories: Math.max(1200, Math.round(bmr * activityMultiplier)), personalised: true };
+}
+
+/**
+ * The full target plan: maintenance, the gap the goal asks for, and the pace
+ * that gap actually buys.
+ *
+ * The deficit is capped twice — once at a sane weekly pace, and again by the
+ * minimum intake nobody should be prescribed below. When the floor bites, the
+ * plan reports the slower rate it can really deliver rather than quietly
+ * printing a target that will not produce the promised result.
+ */
+export function calculatePlan(input: TargetInputs): TargetPlan {
+  const { weightKg } = input;
+  const goal: WeightGoal = input.goal ?? 'maintain';
+  const { calories: maintenance, personalised } = maintenanceCalories(input);
+
+  const ceiling = goal === 'gain' ? MAX_GAIN_KG_PER_WEEK : MAX_LOSS_KG_PER_WEEK;
+  const requestedRate =
+    goal === 'maintain' ? 0 : Math.min(Math.abs(input.rateKgPerWeek ?? 0.5), ceiling);
+
+  const dailyGap = Math.round((requestedRate * KCAL_PER_KG) / 7);
+  const floor = input.sex === 'male' ? MIN_CALORIES_MALE : MIN_CALORIES_OTHER;
+
+  const unbounded = goal === 'lose' ? maintenance - dailyGap : maintenance + dailyGap;
+  const calories = goal === 'lose' ? Math.max(floor, unbounded) : unbounded;
+  const floored = goal === 'lose' && unbounded < floor;
+
+  // Back out the pace the prescribed intake really buys, so a floored plan is
+  // honest about being slower than the one that was asked for.
+  const actualGap = Math.abs(calories - maintenance);
+  const actualRate =
+    goal === 'maintain' ? 0 : Math.round(((actualGap * 7) / KCAL_PER_KG) * 100) / 100;
+
+  return {
+    targets: macrosFor(calories, weightKg, goal),
+    maintenanceCalories: maintenance,
+    goal,
+    requestedRateKgPerWeek: requestedRate,
+    actualRateKgPerWeek: actualRate,
+    floored,
+    personalised,
+  };
+}
+
+/**
+ * Splits a calorie target into macros.
+ *
+ * Protein is set per kilo of body weight rather than as a share of calories,
+ * because the requirement tracks the body, not the diet: cutting it as
+ * calories fall is exactly backwards. It goes *up* on a deficit, where eating
+ * less risks losing muscle along with the fat.
+ */
+function macrosFor(calories: number, weightKg: number | null, goal: WeightGoal): DailyTargets {
+  const perKg = goal === 'lose' ? 2 : goal === 'gain' ? 1.8 : 1.6;
+  const proteinG = weightKg ? Math.round(weightKg * perKg) : 60;
   const fatG = Math.round((calories * 0.3) / 9);
   const carbsG = Math.max(0, Math.round((calories - proteinG * 4 - fatG * 9) / 4));
 
@@ -66,6 +169,29 @@ export function calculateTargets(input: TargetInputs): DailyTargets {
     sodium_mg: 2300,
     saturated_fat_g: Math.round((calories * 0.1) / 9),
   };
+}
+
+export function calculateTargets(input: TargetInputs): DailyTargets {
+  return calculatePlan(input).targets;
+}
+
+/**
+ * When the goal weight arrives at the plan's actual pace. Returns null when
+ * the goal is maintenance, already met, or moving the wrong way — none of
+ * which have a finish line to put on a chart.
+ */
+export function projectGoalDate(
+  currentKg: number,
+  goalKg: number,
+  ratePerWeek: number,
+  from: Date = new Date()
+): { weeks: number; date: string } | null {
+  const remaining = Math.abs(currentKg - goalKg);
+  if (ratePerWeek <= 0 || remaining < 0.1) return null;
+
+  const weeks = Math.ceil(remaining / ratePerWeek);
+  const date = new Date(from.getTime() + weeks * 7 * 24 * 60 * 60 * 1000);
+  return { weeks, date: date.toISOString().slice(0, 10) };
 }
 
 /**

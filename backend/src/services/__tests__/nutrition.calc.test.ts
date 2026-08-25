@@ -10,6 +10,8 @@ import {
   portionFromGrams,
   computeSleepDuration,
   extractJsonObject,
+  calculatePlan,
+  projectGoalDate,
 } from '../nutrition.calc';
 
 describe('calculateTargets', () => {
@@ -265,5 +267,117 @@ describe('stepsToCalories', () => {
 
   it('is zero for no steps', () => {
     expect(stepsToCalories(0, 70)).toBe(0);
+  });
+});
+
+describe('calculatePlan', () => {
+  const ada = {
+    weightKg: 70,
+    heightCm: 170,
+    ageYears: 30,
+    sex: 'female' as const,
+    activityLevel: 'moderate' as const,
+  };
+  // BMR = 10*70 + 6.25*170 - 5*30 - 161 = 700 + 1062.5 - 150 - 161 = 1451.5
+  // moderate 1.55 -> 2249.8 -> 2250
+  const ADA_MAINTENANCE = 2250;
+
+  it('leaves the target at maintenance when the goal is to maintain', () => {
+    const plan = calculatePlan({ ...ada, goal: 'maintain', rateKgPerWeek: 0.5 });
+    expect(plan.targets.calories).toBe(ADA_MAINTENANCE);
+    expect(plan.actualRateKgPerWeek).toBe(0);
+  });
+
+  it('subtracts 7700 kcal per kilo per week when losing', () => {
+    // 0.5 kg/wk = 3850 kcal/wk = 550 kcal/day -> 2250 - 550 = 1700
+    const plan = calculatePlan({ ...ada, goal: 'lose', rateKgPerWeek: 0.5 });
+    expect(plan.targets.calories).toBe(1700);
+    expect(plan.maintenanceCalories).toBe(ADA_MAINTENANCE);
+    expect(plan.actualRateKgPerWeek).toBe(0.5);
+    expect(plan.floored).toBe(false);
+  });
+
+  it('adds the same gap when gaining', () => {
+    // gain is capped at 0.5 kg/wk -> +550 -> 2800
+    const plan = calculatePlan({ ...ada, goal: 'gain', rateKgPerWeek: 0.5 });
+    expect(plan.targets.calories).toBe(2800);
+  });
+
+  it('caps the pace rather than honouring a 2 kg per week request', () => {
+    const plan = calculatePlan({ ...ada, goal: 'lose', rateKgPerWeek: 2 });
+    expect(plan.requestedRateKgPerWeek).toBe(1);
+    // 1 kg/wk = 1100/day -> 2250 - 1100 = 1150, below the 1200 floor
+    expect(plan.targets.calories).toBe(1200);
+    expect(plan.floored).toBe(true);
+  });
+
+  it('reports the slower rate a floored target actually delivers', () => {
+    // Floored at 1200 from a 2250 maintenance is a 1050 kcal gap,
+    // which is 7350 kcal a week = 0.95 kg, not the 1 kg asked for.
+    const plan = calculatePlan({ ...ada, goal: 'lose', rateKgPerWeek: 1 });
+    expect(plan.targets.calories).toBe(1200);
+    expect(plan.actualRateKgPerWeek).toBe(0.95);
+    expect(plan.actualRateKgPerWeek).toBeLessThan(plan.requestedRateKgPerWeek);
+  });
+
+  it('floors men at 1500 rather than 1200', () => {
+    const plan = calculatePlan({
+      weightKg: 60,
+      heightCm: 165,
+      ageYears: 45,
+      sex: 'male',
+      activityLevel: 'sedentary',
+      goal: 'lose',
+      rateKgPerWeek: 1,
+    });
+    expect(plan.targets.calories).toBe(1500);
+    expect(plan.floored).toBe(true);
+  });
+
+  it('never prescribes a deficit off the 2000 kcal fallback without a floor', () => {
+    const plan = calculatePlan({
+      weightKg: null,
+      heightCm: null,
+      ageYears: null,
+      sex: null,
+      activityLevel: null,
+      goal: 'lose',
+      rateKgPerWeek: 1,
+    });
+    expect(plan.personalised).toBe(false);
+    expect(plan.targets.calories).toBeGreaterThanOrEqual(1200);
+  });
+
+  it('raises protein on a cut and lowers it back at maintenance', () => {
+    const cutting = calculatePlan({ ...ada, goal: 'lose', rateKgPerWeek: 0.5 });
+    const holding = calculatePlan({ ...ada, goal: 'maintain' });
+    expect(cutting.targets.protein_g).toBe(140); // 70 * 2.0
+    expect(holding.targets.protein_g).toBe(112); // 70 * 1.6
+    expect(cutting.targets.calories).toBeLessThan(holding.targets.calories);
+  });
+
+  it('treats a missing goal as maintenance, matching an untouched profile', () => {
+    expect(calculatePlan(ada).targets).toEqual(calculateTargets(ada));
+    expect(calculatePlan(ada).goal).toBe('maintain');
+  });
+});
+
+describe('projectGoalDate', () => {
+  const from = new Date('2026-01-01T00:00:00Z');
+
+  it('counts the weeks to the goal weight at the plan rate', () => {
+    // 5 kg to lose at 0.5 kg/wk = 10 weeks -> 2026-03-12
+    const p = projectGoalDate(80, 75, 0.5, from);
+    expect(p?.weeks).toBe(10);
+    expect(p?.date).toBe('2026-03-12');
+  });
+
+  it('works the same for gaining, where the goal is above current', () => {
+    expect(projectGoalDate(60, 63, 0.5, from)?.weeks).toBe(6);
+  });
+
+  it('has no finish line at maintenance or once the goal is met', () => {
+    expect(projectGoalDate(75, 70, 0, from)).toBeNull();
+    expect(projectGoalDate(70, 70, 0.5, from)).toBeNull();
   });
 });

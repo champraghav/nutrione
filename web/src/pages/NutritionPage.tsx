@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@api/client';
 import { Button } from '@components/Button';
@@ -121,9 +122,18 @@ function NutrientBar({
   );
 }
 
+interface TargetPlan {
+  targets: { calories: number };
+  maintenanceCalories: number;
+  goal: 'lose' | 'maintain' | 'gain';
+  actualRateKgPerWeek: number;
+  personalised: boolean;
+}
+
 export function NutritionPage() {
   const [date, setDate] = useState(todayLocal());
   const [nutrition, setNutrition] = useState<DailyNutrition | null>(null);
+  const [plan, setPlan] = useState<TargetPlan | null>(null);
   const [items, setItems] = useState<MealItem[]>([]);
   const [history, setHistory] = useState<HistoryDay[]>([]);
 
@@ -145,12 +155,14 @@ export function NutritionPage() {
   const isToday = date === todayLocal();
 
   const refresh = async () => {
-    const [summaryRes, logRes, historyRes] = await Promise.all([
+    const [summaryRes, logRes, historyRes, planRes] = await Promise.all([
       api.getNutritionSummary(date),
       api.getNutritionLog(date),
       api.getNutritionHistory(30),
+      api.getTargetPlan(),
     ]);
     if (summaryRes.success) setNutrition(summaryRes.data as DailyNutrition);
+    if (planRes.success) setPlan(planRes.data as TargetPlan);
     if (logRes.success) setItems(logRes.data as MealItem[]);
     if (historyRes.success) setHistory((historyRes.data as HistoryDay[]).slice().reverse());
     setRefreshKey((k) => k + 1);
@@ -259,11 +271,31 @@ export function NutritionPage() {
                 ))}
               </div>
             </div>
-            <p className="text-xs text-gray-400">
-              Targets are estimated from your profile (or a 2000 kcal default if it's incomplete) using standard
-              nutrition guidelines. Fill in your weight, height, and activity level on the Profile page for more
-              accurate numbers.
-            </p>
+            {/* Says where the number came from. A calorie target with no
+                stated reasoning is just a number to resent. */}
+            {plan?.personalised ? (
+              <p className="text-xs text-gray-400">
+                {plan.goal === 'maintain'
+                  ? `Set to roughly what you burn in a day (${plan.maintenanceCalories.toLocaleString()} kcal), from your profile.`
+                  : `You burn about ${plan.maintenanceCalories.toLocaleString()} kcal a day, and this sits ${
+                      plan.goal === 'lose' ? 'below' : 'above'
+                    } that by ${Math.abs(
+                      plan.targets.calories - plan.maintenanceCalories
+                    ).toLocaleString()} to ${plan.goal} about ${plan.actualRateKgPerWeek} kg a week.`}{' '}
+                <Link to="/profile" className="text-primary-600 hover:underline">
+                  Change your goal
+                </Link>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400">
+                These are a generic 2,000 kcal default — your profile is missing the height, weight or date of birth
+                the calculation needs.{' '}
+                <Link to="/profile" className="text-primary-600 hover:underline">
+                  Fill those in
+                </Link>{' '}
+                for targets that match your body and your goal.
+              </p>
+            )}
           </div>
         )}
       </div>

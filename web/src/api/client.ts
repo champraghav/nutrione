@@ -141,6 +141,7 @@ export const api = {
   bulkLogMeals: (date: string, items: Array<{ foodId: string; quantity: number; unit: string }>, mealType?: string) =>
     request(http.post('/nutrition/meals/bulk', { date, items, mealType })),
   getNutrientGaps: (date: string) => request(http.get('/nutrition/gaps', { params: { date } })),
+  getTargetPlan: () => request(http.get('/nutrition/plan')),
 
   // Hydration
   getHydration: (date?: string) => request(http.get('/hydration', { params: { date } })),

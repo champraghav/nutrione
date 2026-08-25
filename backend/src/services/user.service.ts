@@ -13,12 +13,17 @@ export interface UserProfile {
   weight_kg: number | null;
   activity_level: string | null;
   timezone: string;
+  goal: string | null;
+  goal_weight_kg: number | null;
+  rate_kg_per_week: number | null;
+  onboarded_at: string | null;
 }
 
 export async function getMe(userId: string): Promise<UserProfile> {
   const user = await queryOne<UserProfile>(
     `SELECT u.id, u.email, u.first_name, u.last_name, u.created_at,
-            p.date_of_birth, p.sex, p.height_cm, p.weight_kg, p.activity_level, p.timezone
+            p.date_of_birth, p.sex, p.height_cm, p.weight_kg, p.activity_level, p.timezone,
+            p.goal, p.goal_weight_kg, p.rate_kg_per_week, p.onboarded_at
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      WHERE u.id = $1 AND u.active = true`,
@@ -37,6 +42,11 @@ export interface UpdateUserInput {
   weightKg?: number;
   activityLevel?: string;
   timezone?: string;
+  goal?: string;
+  goalWeightKg?: number;
+  rateKgPerWeek?: number;
+  /** Set by the onboarding wizard on its last step; never unset afterwards. */
+  onboarded?: boolean;
 }
 
 export async function updateMe(userId: string, input: UpdateUserInput): Promise<UserProfile> {
@@ -56,6 +66,10 @@ export async function updateMe(userId: string, input: UpdateUserInput): Promise<
        weight_kg = COALESCE($5, weight_kg),
        activity_level = COALESCE($6, activity_level),
        timezone = COALESCE($7, timezone),
+       goal = COALESCE($8, goal),
+       goal_weight_kg = COALESCE($9, goal_weight_kg),
+       rate_kg_per_week = COALESCE($10, rate_kg_per_week),
+       onboarded_at = CASE WHEN $11 THEN COALESCE(onboarded_at, now()) ELSE onboarded_at END,
        updated_at = now()
      WHERE user_id = $1`,
     [
@@ -66,6 +80,10 @@ export async function updateMe(userId: string, input: UpdateUserInput): Promise<
       input.weightKg ?? null,
       input.activityLevel ?? null,
       input.timezone ?? null,
+      input.goal ?? null,
+      input.goalWeightKg ?? null,
+      input.rateKgPerWeek ?? null,
+      input.onboarded === true,
     ]
   );
 

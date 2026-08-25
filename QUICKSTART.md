@@ -23,9 +23,17 @@ npm run dev
 ```
 
 Visit **http://localhost:5173**, click **Sign up**, and create an account —
-there's no pre-seeded user, so you're creating a fresh one. The health score
-and history charts will look empty until you log a meal, a workout, and a
-night of sleep; the app is designed to make sense the moment you do.
+there's no pre-seeded user, so you're creating a fresh one.
+
+Signing up drops you into a three-step setup: your body stats, what you're
+trying to do with your weight, and the plan it works out from those. That is
+what turns the calorie target from a generic 2,000 into your number, so it's
+worth the thirty seconds — but every step has **Skip for now** if you'd rather
+just look around.
+
+The history charts stay empty until you log a meal, a workout and a night of
+sleep. The health score is deliberately blank rather than low until then: it
+scores what you log, so with nothing logged there is nothing to score.
 
 To stop everything: `docker compose down` (add `-v` to also wipe the database).
 

@@ -60,6 +60,17 @@ nutritionRouter.get('/summary', async (req, res, next) => {
   }
 });
 
+// The targets plus why they are what they are: maintenance, the goal, the
+// pace it buys, and when the goal weight arrives at that pace.
+nutritionRouter.get('/plan', async (req, res, next) => {
+  try {
+    const plan = await nutritionService.getTargetPlan(req.userId);
+    res.json({ success: true, data: plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
 nutritionRouter.get('/gaps', async (req, res, next) => {
   try {
     const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);

@@ -37,8 +37,14 @@ curl -X POST $BASE/auth/logout -H "Content-Type: application/json" \
 ## Users
 
 - `GET /users/me`
-- `PUT /users/me` — body: `firstName, lastName, dateOfBirth, sex, heightCm, weightKg, activityLevel, timezone`
+- `PUT /users/me` — body: `firstName, lastName, dateOfBirth, sex, heightCm, weightKg,
+  activityLevel, timezone, goal, goalWeightKg, rateKgPerWeek, onboarded`
 - `DELETE /users/me` — deactivates the account
+
+`goal` is `lose`, `maintain` or `gain` and `rateKgPerWeek` is a magnitude in
+0-1 — the goal supplies the direction. Together they decide whether the
+calorie target sits above or below maintenance. `onboarded: true` stamps
+`onboarded_at` once and never clears it.
 
 ## Nutrition
 
@@ -91,6 +97,30 @@ and private, via the same ownership scoping as imported foods.
 
 Per-serving nutrition is recomputed from the ingredients on every change, so
 the stored numbers cannot drift from what the recipe contains.
+
+### Targets and the plan behind them
+
+- `GET /nutrition/plan` — the daily targets plus the reasoning: maintenance
+  calories, the goal, the pace it buys, and when the goal weight arrives at
+  that pace.
+
+Calories come from Mifflin-St Jeor scaled by activity level, then shifted by
+the goal at 7,700 kcal per kilogram — so 0.5 kg a week is a 550 kcal daily
+gap. Two safety rails apply:
+
+- **Pace** is capped at 1 kg/week losing and 0.5 kg/week gaining. Faster loss
+  costs lean mass; faster gain is mostly fat.
+- **Intake** never goes below 1,500 kcal (male) or 1,200 kcal (other). When
+  that floor cuts the deficit short, `floored` is true and
+  `actualRateKgPerWeek` reports the slower pace the target really delivers,
+  rather than printing a number that will not produce the promised result.
+
+Protein is set per kilogram of body weight, not as a share of calories, and
+goes *up* on a deficit (2.0 g/kg, against 1.6 at maintenance) because eating
+less risks losing muscle with the fat.
+
+A profile missing weight, height or date of birth falls back to a flat 2,000
+kcal with `personalised: false`, and no deficit is applied to a guess.
 
 ### Daily totals
 
@@ -249,6 +279,31 @@ streak — the day is not over yet.
 ## Health
 
 - `GET /health/score` — today's 8-dimension score, calculated on demand
+
+**A score only covers what it can see.** Every dimension reports whether it had
+anything to look at, and the overall is a weighted average over just those,
+renormalised by their own weight. A day with nothing logged returns
+`overall_score: null` — unscored, not scored badly — and writes no row, so an
+untouched day leaves no phantom point on the history chart.
+
+- `coverage` (0-1) is the share of the scoring weight that had data behind it
+- `missing` lists the dimensions with nothing logged, heaviest first
+- `deferred` lists dimensions that *were* logged but cannot be judged yet:
+  calories and water accumulate through the day, and half a day's food at two
+  in the afternoon is an unfinished day rather than a bad one. Going over
+  target is final, so that is scored immediately.
+- `next_best` is the single most worthwhile thing to log next. It is drawn from
+  `missing` only, so it can never tell someone to log food they already logged.
+
+Fetching today's score also re-scores yesterday. Its stored row would otherwise
+keep whatever it was given while the day was still in progress, with the
+accumulating dimensions deferred, leaving every day in the history permanently
+flattering.
+
+Nutrition is scored against the user's own targets rather than a flat 2,000
+kcal — measuring everyone against the same number marked a 1,500 kcal plan
+followed exactly as a 75. Activity counts steps as well as workouts, so a
+12,000-step day with no gym session is no longer a zero.
 - `GET /health/score/history?days=30`
 - `GET /health/metrics?type=heart_rate&days=30`
 - `POST /health/metrics` — body: `{ type, value, unit }`

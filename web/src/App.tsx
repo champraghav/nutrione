@@ -22,13 +22,27 @@ import { ClientDetailPage } from '@pages/ClientDetailPage';
 import { PlansPage } from '@pages/PlansPage';
 import { PlanBuilderPage } from '@pages/PlanBuilderPage';
 import { MyFoodsPage } from '@pages/MyFoodsPage';
+import { OnboardingPage } from '@pages/OnboardingPage';
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const user = useAppStore((state) => state.user);
   const authLoading = useAppStore((state) => state.authLoading);
   if (authLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
+  // Anyone who has never been through the wizard is sent there once. It is
+  // skippable from every step, so this can be passed in a single tap.
+  if (!user.onboarded_at) return <Navigate to="/onboarding" replace />;
   return children;
+}
+
+/** Authenticated, but deliberately outside the wizard redirect above. */
+function OnboardingRoute() {
+  const user = useAppStore((state) => state.user);
+  const authLoading = useAppStore((state) => state.authLoading);
+  if (authLoading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.onboarded_at) return <Navigate to="/" replace />;
+  return <OnboardingPage />;
 }
 
 export default function App() {
@@ -43,6 +57,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/onboarding" element={<OnboardingRoute />} />
         <Route
           element={
             <ProtectedRoute>

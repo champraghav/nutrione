@@ -542,3 +542,14 @@ CREATE TABLE IF NOT EXISTS coach_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_coach_messages_thread ON coach_messages(coach_client_id, created_at ASC);
+
+-- What the user is actually trying to do with their weight. Without this the
+-- calorie target can only ever be maintenance, which is the wrong number for
+-- most people who open a food diary in the first place.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS goal TEXT
+  CHECK (goal IN ('lose', 'maintain', 'gain')) DEFAULT 'maintain';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS goal_weight_kg NUMERIC(5,2);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rate_kg_per_week NUMERIC(3,2);
+-- Set once the onboarding wizard has been through, so it is offered exactly
+-- once and never again on a returning login.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;

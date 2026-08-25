@@ -3,10 +3,15 @@ import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 import {
   calculateTargets,
+  calculatePlan,
+  projectGoalDate,
   calculateAge,
   sizeSuggestion,
   calorieBudget,
   DailyTargets as PureTargets,
+  TargetInputs,
+  TargetPlan,
+  WeightGoal,
 } from './nutrition.calc';
 
 export interface Food {
@@ -295,22 +300,70 @@ export interface DailyTargets {
   saturated_fat_g: number; // upper limit
 }
 
-export async function getDailyTargets(userId: string): Promise<DailyTargets> {
-  const profile = await queryOne<{
-    weight_kg: string | number | null;
-    height_cm: string | number | null;
-    date_of_birth: string | null;
-    sex: string | null;
-    activity_level: string | null;
-  }>('SELECT weight_kg, height_cm, date_of_birth, sex, activity_level FROM profiles WHERE user_id = $1', [userId]);
+interface TargetProfileRow {
+  weight_kg: string | number | null;
+  height_cm: string | number | null;
+  date_of_birth: string | null;
+  sex: string | null;
+  activity_level: string | null;
+  goal: string | null;
+  goal_weight_kg: string | number | null;
+  rate_kg_per_week: string | number | null;
+}
 
-  return calculateTargets({
+const TARGET_PROFILE_COLUMNS =
+  'weight_kg, height_cm, date_of_birth, sex, activity_level, goal, goal_weight_kg, rate_kg_per_week';
+
+function targetInputsFrom(profile: TargetProfileRow | null): TargetInputs {
+  return {
     weightKg: profile?.weight_kg ? Number(profile.weight_kg) : null,
     heightCm: profile?.height_cm ? Number(profile.height_cm) : null,
     ageYears: profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null,
     sex: profile?.sex ?? null,
     activityLevel: profile?.activity_level ?? null,
-  });
+    goal: (profile?.goal as WeightGoal | null) ?? null,
+    rateKgPerWeek: profile?.rate_kg_per_week ? Number(profile.rate_kg_per_week) : null,
+  };
+}
+
+export async function getDailyTargets(userId: string): Promise<DailyTargets> {
+  const profile = await queryOne<TargetProfileRow>(
+    `SELECT ${TARGET_PROFILE_COLUMNS} FROM profiles WHERE user_id = $1`,
+    [userId]
+  );
+  return calculateTargets(targetInputsFrom(profile));
+}
+
+/**
+ * The targets plus the reasoning behind them — maintenance, the goal, the pace
+ * it buys, and when the goal weight arrives at that pace. The nutrition page
+ * shows the numbers; this is what lets it explain them.
+ */
+export async function getTargetPlan(userId: string): Promise<
+  TargetPlan & {
+    currentWeightKg: number | null;
+    goalWeightKg: number | null;
+    projection: { weeks: number; date: string } | null;
+  }
+> {
+  const profile = await queryOne<TargetProfileRow>(
+    `SELECT ${TARGET_PROFILE_COLUMNS} FROM profiles WHERE user_id = $1`,
+    [userId]
+  );
+
+  const plan = calculatePlan(targetInputsFrom(profile));
+  const currentWeightKg = profile?.weight_kg ? Number(profile.weight_kg) : null;
+  const goalWeightKg = profile?.goal_weight_kg ? Number(profile.goal_weight_kg) : null;
+
+  return {
+    ...plan,
+    currentWeightKg,
+    goalWeightKg,
+    projection:
+      currentWeightKg && goalWeightKg
+        ? projectGoalDate(currentWeightKg, goalWeightKg, plan.actualRateKgPerWeek)
+        : null,
+  };
 }
 
 export interface DailyNutrition {

@@ -27,6 +27,12 @@ const updateSchema = Joi.object({
   weightKg: Joi.number().positive().max(500),
   activityLevel: Joi.string().valid('sedentary', 'light', 'moderate', 'active', 'very_active'),
   timezone: Joi.string(),
+  goal: Joi.string().valid('lose', 'maintain', 'gain'),
+  goalWeightKg: Joi.number().positive().max(500),
+  // A magnitude — the goal supplies the direction. Capped here as well as in
+  // the calc so an unreasonable pace is rejected rather than silently clamped.
+  rateKgPerWeek: Joi.number().min(0).max(1),
+  onboarded: Joi.boolean(),
 });
 
 userRouter.put('/me', validate(updateSchema), async (req, res, next) => {
